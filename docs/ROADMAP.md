@@ -345,18 +345,22 @@ MetricSentinel/
 
 ## Open decisions requiring owner approval (before Phase 1)
 
-| ID | Decision | Recommendation |
-|---|---|---|
-| D-1 | Agent framework | Google ADK; LangGraph as fallback |
-| D-2 | Single agent instead of the 3-agent design in the earlier research note | Single Investigator agent + deterministic verifier |
-| D-3 | Tracing tool | Arize Phoenix (lighter to self-host) instead of Langfuse |
-| D-4 | UI | Streamlit for MVP |
-| D-5 | Fine-tuning | Gated by the Phase 8 rule, not assumed |
-| D-6 | Hosted LLM | Gemini free tier, with Groq and local Ollama as fallbacks |
-| D-7 | Repository name and visibility | `MetricSentinel`, public on GitHub from Phase 1 |
+**Status: all approved by the owner on 2026-09-27, as recommended.**
+
+| ID | Decision | Recommendation | Status |
+|---|---|---|---|
+| D-1 | Agent framework | Google ADK; LangGraph as fallback | Approved |
+| D-2 | Single agent instead of the 3-agent design in the earlier research note | Single Investigator agent + deterministic verifier | Approved |
+| D-3 | Tracing tool | Arize Phoenix (lighter to self-host) instead of Langfuse | Approved |
+| D-4 | UI | Streamlit for MVP | Approved |
+| D-5 | Fine-tuning | Gated by the Phase 8 rule, not assumed | Approved |
+| D-6 | Hosted LLM | Gemini free tier, with Groq and local Ollama as fallbacks | Approved |
+| D-7 | Repository name and visibility | `MetricSentinel`, public on GitHub from Phase 1 | Approved |
 
 ## Change log
 
 | Date | Change | Reason |
 |---|---|---|
 | 2026-09-27 | Phase 0 documents created | Initial plan |
+| 2026-09-27 | Decisions D-1 to D-7 approved; repository initialised with the Phase 0 commit | Phase 0 Definition of Done met; Phase 1 unblocked |
+| 2026-09-27 | Python 3.12.13 virtual environment created with uv | Phase 1 dev environment setup started |
