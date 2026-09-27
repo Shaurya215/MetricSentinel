@@ -1,0 +1,62 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.python-version
+
+# ---- Tooling caches ----
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# ---- Secrets / env ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---- Data (never commit raw or generated data) ----
+data/raw/*
+data/warehouse/
+data/reports/
+data/scenarios/**/*.json
+!data/raw/checksums.json
+*.duckdb
+*.duckdb.wal
+*.parquet
+*.csv
+!evaluation/datasets/**/*.csv
+
+# ---- Experiment tracking / models ----
+mlruns/
+mlartifacts/
+models/weights/
+*.gguf
+*.safetensors
+*.bin
+*.pt
+outputs/
+checkpoints/
+wandb/
+
+# ---- Runtime ----
+logs/
+*.log
+outbox/
+
+# ---- Docker / OS / IDE ----
+.docker/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
