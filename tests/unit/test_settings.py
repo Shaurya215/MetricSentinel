@@ -8,6 +8,14 @@ from pydantic import SecretStr
 from core.settings import Settings
 
 
+@pytest.fixture(autouse=True)
+def clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests must not depend on the machine: CI sets APP_ENV, developers have a .env."""
+    for name in Settings.model_fields:
+        monkeypatch.delenv(name.upper(), raising=False)
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+
+
 @pytest.mark.unit
 def test_defaults_are_usable() -> None:
     settings = Settings()
