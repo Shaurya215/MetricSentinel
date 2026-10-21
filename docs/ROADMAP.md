@@ -1,7 +1,7 @@
 # Roadmap — MetricSentinel
 
-> Current phase: **Phase 0 — Planning & Initialization.**
-> No phase after Phase 0 has started. No feature is implemented.
+> Current phase: **Phase 1 — Repository Foundation & Dev Environment** (deliverables complete; awaiting owner review).
+> Phase 0 is complete. No MetricSentinel feature is implemented.
 > Durations are part-time estimates, not commitments.
 
 ## Overview
@@ -39,7 +39,7 @@ flowchart LR
 
 ---
 
-## Phase 0 — Planning & Initialization *(current)*
+## Phase 0 — Planning & Initialization *(complete)*
 
 **Objective:** Agree on what will be built, why, and how success is measured, before writing code.
 
@@ -63,7 +63,7 @@ flowchart LR
 
 ---
 
-## Phase 1 — Repository Foundation & Dev Environment
+## Phase 1 — Repository Foundation & Dev Environment *(current)*
 
 **Objective:** A clean, reproducible project skeleton, so that every later phase adds features rather than setup.
 
@@ -322,6 +322,7 @@ MetricSentinel/
 ├── README.md
 ├── docs/                # these documents + decisions/ (ADRs) + THREAT_MODEL.md (P7)
 ├── config/              # metrics.yaml, models.yaml, scenarios/
+├── core/                # settings and logging shared by every layer (added in Phase 1)
 ├── data/                # not committed (see DATA_PLAN.md)
 ├── pipelines/           # download, ingest, validation, sql models, fault injector
 ├── ds/                  # forecasting, detection, rootcause stats, charts
@@ -364,3 +365,7 @@ MetricSentinel/
 | 2026-09-27 | Phase 0 documents created | Initial plan |
 | 2026-09-27 | Decisions D-1 to D-7 approved; repository initialised with the Phase 0 commit | Phase 0 Definition of Done met; Phase 1 unblocked |
 | 2026-09-27 | Python 3.12.13 virtual environment created with uv | Phase 1 dev environment setup started |
+| 2026-09-27 | Phase 1 skeleton delivered: pyproject + uv.lock (groups `dev`, `ds`, `agent`), directory layout, ruff/mypy/pytest/pre-commit, Pydantic Settings + structlog with `run_id`, Docker Compose (Postgres 16 + pgvector 0.8, API, UI), Makefile, GitHub Actions CI | Phase 1 tasks |
+| 2026-09-27 | Added a `core/` package for settings and logging (not in the Phase 0 layout) | Settings and logging are used by pipelines, DS, agent and backend alike; putting them in `backend/` would make every layer depend on the web app |
+| 2026-09-27 | Streamlit placed in the core dependencies, not a group | The `ui` Compose service must run from the same image as `api` in Phase 1 |
+| 2026-09-27 | Added `.gitattributes` forcing LF line endings | Files are copied into Linux containers and run on a Linux CI runner; CRLF would break shell scripts there |

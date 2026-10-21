@@ -1,0 +1,104 @@
+# NFR-002: the whole stack starts with `docker compose up` on a 16 GB laptop.
+# Phase 1: Postgres + pgvector is real; api and ui are working placeholders.
+
+name: metricsentinel
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-metricsentinel}
+      POSTGRES_USER: ${POSTGRES_USER:-metricsentinel}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-metricsentinel}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deployment/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-metricsentinel} -d ${POSTGRES_DB:-metricsentinel}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    image: metricsentinel-app:dev
+    build:
+      context: .
+      dockerfile: deployment/Dockerfile
+    command:
+      ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-metricsentinel}
+      POSTGRES_USER: ${POSTGRES_USER:-metricsentinel}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-metricsentinel}
+      DUCKDB_PATH: /app/data/warehouse/warehouse.duckdb
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      # The warehouse is built on the host by `make data` (Phase 2) and read here.
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status == 200 else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  ui:
+    # Same image as api; built once by the api service. Local-only image,
+    # so never try to pull it from a registry.
+    image: metricsentinel-app:dev
+    pull_policy: never
+    command:
+      [
+        "streamlit",
+        "run",
+        "frontend/app.py",
+        "--server.address=0.0.0.0",
+        "--server.port=8501",
+        "--server.headless=true",
+        "--browser.gatherUsageStats=false",
+      ]
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      API_PORT: 8000
+    ports:
+      - "${UI_PORT:-8501}:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=3).status == 200 else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+volumes:
+  pgdata:

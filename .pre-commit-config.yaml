@@ -1,0 +1,36 @@
+# Run on every commit:  pre-commit install
+# Run over everything:   pre-commit run --all-files
+default_language_version:
+  python: python3.12
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: ["--maxkb=1024"] # raw data and models must never be committed
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.9
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  # mypy runs from the project venv so it sees the locked dependency versions.
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy (lenient)
+        entry: uv run mypy
+        language: system
+        types: [python]
+        pass_filenames: false

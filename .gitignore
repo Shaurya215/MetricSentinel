@@ -26,10 +26,13 @@ htmlcov/
 
 # ---- Data (never commit raw or generated data) ----
 data/raw/*
-data/warehouse/
-data/reports/
-data/scenarios/**/*.json
+data/warehouse/*
+data/reports/*
+data/scenarios/*.json
 !data/raw/checksums.json
+# Keep the directory layout (and its READMEs) in the repository.
+!data/**/.gitkeep
+!data/**/README.md
 *.duckdb
 *.duckdb.wal
 *.parquet
@@ -52,6 +55,9 @@ wandb/
 logs/
 *.log
 outbox/
+
+# ---- uv ----
+# uv.lock IS committed: it is the reproducibility record (see TECH_STACK.md §5).
 
 # ---- Docker / OS / IDE ----
 .docker/

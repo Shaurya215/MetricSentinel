@@ -2,8 +2,9 @@
 
 **Autonomous KPI anomaly detection and root-cause investigation, with grounded reports and human approval.**
 
-> **Status: Phase 0 — Planning & Initialization.**
-> No code has been written. Every capability below is *planned*. Nothing is implemented yet.
+> **Status: Phase 1 — Repository foundation & dev environment.**
+> The project skeleton, tooling, configuration, logging, Docker stack and CI exist.
+> No MetricSentinel capability is implemented yet: every capability below is still *planned*.
 
 ---
 
@@ -15,6 +16,38 @@
 | `[EXT]` | Planned extension after MVP (Phases 7–9, target v1.0) |
 | `[FUTURE]` | Idea for after v1.0; not scheduled |
 | `[DONE]` | Implemented and verified. **No item carries this label yet.** |
+
+---
+
+## Getting started
+
+**Prerequisites:** [uv](https://docs.astral.sh/uv/), [Docker Desktop](https://www.docker.com/products/docker-desktop/), GNU Make, Git.
+uv installs Python 3.12 itself if it is missing (`uv python install 3.12`).
+
+```bash
+git clone https://github.com/Shaurya215/MetricSentinel.git
+cd MetricSentinel
+
+make setup     # locked dependencies, pre-commit hooks, local .env from .env.example
+make lint      # ruff + mypy
+make test      # fast unit tests
+make up        # Postgres + pgvector, API and UI in Docker; waits until all are healthy
+make health    # GET /health  ->  200 {"status": "ok", ...}
+```
+
+| Service | URL |
+|---|---|
+| API health | http://localhost:8000/health |
+| API docs (OpenAPI) | http://localhost:8000/docs |
+| Review UI (placeholder until Phase 6) | http://localhost:8501 |
+| PostgreSQL + pgvector | `localhost:5432` |
+
+Run `make` to list every command. `make data` and `make eval` are placeholders that
+exit with an error until Phases 2 and 3 implement them.
+
+**Dependency groups.** `uv sync` installs the core runtime plus the `dev` tools.
+The heavier stacks are opt-in: `uv sync --group ds` (Phases 2–3) and
+`uv sync --group agent` (Phases 4–5).
 
 ---
 

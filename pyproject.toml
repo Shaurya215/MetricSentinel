@@ -1,0 +1,124 @@
+[project]
+name = "metricsentinel"
+version = "0.0.1"
+description = "Autonomous KPI anomaly detection and root-cause investigation with grounded reports and human approval."
+readme = "README.md"
+requires-python = "==3.12.*"
+license = { text = "MIT" }
+authors = [{ name = "Shaurya215" }]
+
+# Core runtime: only what the application process itself needs.
+# Heavier stacks live in the `ds` and `agent` dependency groups so that
+# `uv sync` stays fast and Phase 1 does not install Phase 3+ libraries.
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "structlog>=25.1",
+    "pyyaml>=6.0",
+    "streamlit>=1.42",
+]
+
+[project.urls]
+Repository = "https://github.com/Shaurya215/MetricSentinel"
+
+# PEP 735 dependency groups. `dev` is installed by default (see [tool.uv]);
+# `ds` and `agent` are opt-in: `uv sync --group ds --group agent`.
+[dependency-groups]
+dev = [
+    "ruff>=0.9",
+    "mypy>=1.14",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "pre-commit>=4.1",
+    "httpx>=0.28",          # FastAPI TestClient transport
+    "types-pyyaml>=6.0",
+]
+
+# Phase 2-3: warehouse, validation, forecasting, statistics, tracking.
+ds = [
+    "duckdb>=1.1",
+    "pandas>=2.2",
+    "pandera>=0.22",
+    "statsforecast>=2.0",
+    "scipy>=1.15",
+    "statsmodels>=0.14",
+    "ruptures>=1.1",
+    "mlflow>=2.20",
+    "matplotlib>=3.10",
+]
+
+# Phase 4-5: agent framework, SQL safety, retrieval.
+agent = [
+    "google-adk>=1.0",
+    "sqlglot>=26.0",
+    "sentence-transformers>=3.4",
+]
+
+[tool.uv]
+# Application, not a distributable library: nothing to build or install as a
+# package. Top-level modules are importable from the repository root.
+package = false
+default-groups = ["dev"]
+
+# ---------------------------------------------------------------------------
+# Ruff — linting and formatting
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["data", "notebooks", ".venv"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # comprehensions
+    "SIM",  # flake8-simplify
+    "PTH",  # use pathlib
+    "RUF",  # ruff-specific
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+# ---------------------------------------------------------------------------
+# mypy — lenient, per TECH_STACK.md
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+files = ["backend", "frontend", "core", "tests"]
+ignore_missing_imports = true
+warn_unused_configs = true
+warn_redundant_casts = true
+no_implicit_optional = true
+check_untyped_defs = true
+# Deliberately lenient for now; tightened per-module as code lands.
+disallow_untyped_defs = false
+strict_optional = true
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q --strict-markers --strict-config"
+markers = [
+    "unit: fast, no external services",
+    "integration: needs Postgres or the warehouse",
+    "eval: evaluation-suite gate, run on demand",
+]
+
+[tool.coverage.run]
+branch = true
+omit = ["tests/*", "notebooks/*"]

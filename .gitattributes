@@ -1,0 +1,14 @@
+# Files are copied into Linux containers and run on a Linux CI runner, so keep
+# LF line endings everywhere, including Windows working copies.
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Binary files: never touch.
+*.png    binary
+*.jpg    binary
+*.duckdb binary
+*.parquet binary
