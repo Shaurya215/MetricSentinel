@@ -1,7 +1,7 @@
 # Roadmap — MetricSentinel
 
-> Current phase: **Phase 1 — Repository Foundation & Dev Environment** (deliverables complete; awaiting owner review).
-> Phase 0 is complete. No MetricSentinel feature is implemented.
+> Current phase: **Phase 2 — Data Ingestion, Validation & EDA** (code complete and tested on synthetic data; the first run on the real dataset and the real EDA findings are still outstanding).
+> Phases 0 and 1 are complete (Phase 1 CI is green on `main`). No MetricSentinel feature has been verified on real data yet.
 > Durations are part-time estimates, not commitments.
 
 ## Overview
@@ -63,7 +63,7 @@ flowchart LR
 
 ---
 
-## Phase 1 — Repository Foundation & Dev Environment *(current)*
+## Phase 1 — Repository Foundation & Dev Environment *(complete)*
 
 **Objective:** A clean, reproducible project skeleton, so that every later phase adds features rather than setup.
 
@@ -90,7 +90,9 @@ flowchart LR
 
 ---
 
-## Phase 2 — Data Ingestion, Validation & EDA
+## Phase 2 — Data Ingestion, Validation & EDA *(current)*
+
+**Status:** pipeline, tests and EDA tooling are built and pass on synthetic data. **Outstanding before this phase can be closed:** (1) run `make data` on the real Olist data and commit `data/raw/checksums.json`; (2) run `make eda` / execute `notebooks/01_eda.ipynb` and record the confirmed facts in `docs/DATA_PLAN.md` section 14; (3) review the soft-check thresholds that are marked PROVISIONAL.
 
 **Objective:** A reproducible warehouse built from Olist, with known data quality and an EDA that informs the detection design.
 
@@ -369,3 +371,10 @@ MetricSentinel/
 | 2026-09-27 | Added a `core/` package for settings and logging (not in the Phase 0 layout) | Settings and logging are used by pipelines, DS, agent and backend alike; putting them in `backend/` would make every layer depend on the web app |
 | 2026-09-27 | Streamlit placed in the core dependencies, not a group | The `ui` Compose service must run from the same image as `api` in Phase 1 |
 | 2026-09-27 | Added `.gitattributes` forcing LF line endings | Files are copied into Linux containers and run on a Linux CI runner; CRLF would break shell scripts there |
+| 2026-10-21 | Phase 1 CI fixed: settings tests no longer depend on environment variables (`APP_ENV=ci` broke a default-value test); CI green | First CI run failed |
+| 2026-10-21 | Phase 2 pipeline built: `pipelines/` (download, validate, build, quality, eda, synthetic), SQL models for staging and marts, 71 tests | Phase 2 tasks |
+| 2026-10-21 | New dependency group `data` (duckdb, pandas, pandera, holidays, matplotlib), installed by default; `ds` now includes it and keeps only forecasting, statistics and MLflow | CI and the data pipeline should not install the heavy forecasting stack |
+| 2026-10-21 | `data_hash` hashes the SQL model *file contents* instead of the git SHA of the SQL models | Same value on a dirty working tree and without git |
+| 2026-10-21 | Checksums are trust-on-first-use (`data/raw/checksums.json` is written by the first successful load); row counts are checked against the published Olist counts | The real files could not be downloaded without Kaggle credentials when Phase 2 was built |
+| 2026-10-21 | Added `marts.seller_tier_daily` (point-in-time seller tier) and `meta.build` to the warehouse | Required by DATA_PLAN section 5; not in the original table list |
+| 2026-10-21 | `marts_scn` (scenario copy of the marts) is not created in Phase 2 | It belongs to the fault injector (Phase 3) |

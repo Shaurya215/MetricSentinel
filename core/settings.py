@@ -53,6 +53,16 @@ class Settings(BaseSettings):
     # ---- Analytics warehouse: DuckDB (opened read-only by agent tools, NFR-009) ----
     duckdb_path: Path = REPO_ROOT / "data" / "warehouse" / "warehouse.duckdb"
 
+    # ---- Data pipeline (Phase 2) ----
+    raw_data_dir: Path = REPO_ROOT / "data" / "raw"
+    reports_dir: Path = REPO_ROOT / "data" / "reports"
+    # Salt for pseudonymising customer ids (DATA_PLAN.md section 12). The default is
+    # for local development only: it is public, so it protects nothing in a deployment.
+    pseudonym_salt: SecretStr = SecretStr("dev-only-salt-change-me")
+    # Optional Kaggle credentials for `make data`; a manually downloaded zip works too.
+    kaggle_username: str | None = None
+    kaggle_key: SecretStr | None = None
+
     # ---- Experiment tracking (used from Phase 3) ----
     mlflow_tracking_uri: str = f"file://{(REPO_ROOT / 'mlruns').as_posix()}"
 

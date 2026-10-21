@@ -2,9 +2,10 @@
 
 **Autonomous KPI anomaly detection and root-cause investigation, with grounded reports and human approval.**
 
-> **Status: Phase 1 — Repository foundation & dev environment.**
-> The project skeleton, tooling, configuration, logging, Docker stack and CI exist.
-> No MetricSentinel capability is implemented yet: every capability below is still *planned*.
+> **Status: Phase 2 — Data ingestion, validation & EDA (code complete; awaiting the first run on the real dataset).**
+> The data pipeline is built and tested on *synthetic* data only. It has not yet been run on the real Olist
+> data, so no data-quality result, EDA finding or KPI number exists yet. Every capability below is still *planned*
+> until it is verified on real data.
 
 ---
 
@@ -42,12 +43,33 @@ make health    # GET /health  ->  200 {"status": "ok", ...}
 | Review UI (placeholder until Phase 6) | http://localhost:8501 |
 | PostgreSQL + pgvector | `localhost:5432` |
 
-Run `make` to list every command. `make data` and `make eval` are placeholders that
-exit with an error until Phases 2 and 3 implement them.
+Run `make` to list every command. `make eval` is a placeholder that exits with an error until Phase 3.
 
-**Dependency groups.** `uv sync` installs the core runtime plus the `dev` tools.
-The heavier stacks are opt-in: `uv sync --group ds` (Phases 2–3) and
-`uv sync --group agent` (Phases 4–5).
+**Dependency groups.** `uv sync` installs the core runtime plus the `dev` and `data` groups
+(DuckDB, pandas, Pandera, holidays, matplotlib). The heavier stacks are opt-in:
+`uv sync --group ds` (forecasting, Phase 3) and `uv sync --group agent` (Phases 4–5).
+
+### Build the warehouse (Phase 2)
+
+The Olist dataset is not in the repository. Get it once, in either way:
+
+1. **Manual:** download the zip from <https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce>
+   and put it in `data/raw/` (no need to unzip).
+2. **Automatic:** create a Kaggle API token (<https://www.kaggle.com/settings> → API), set
+   `KAGGLE_USERNAME` and `KAGGLE_KEY` in `.env`.
+
+```bash
+make data      # verify files, load, validate, build staging + marts, write the quality report
+make eda       # derive the monitoring window, seasonality and sample-size rule from the data
+```
+
+The first successful run records the file checksums in `data/raw/checksums.json`. **Commit that file**;
+later runs fail loudly if a raw file changes. Outputs: `data/warehouse/warehouse.duckdb` and
+`data/reports/quality_report.html|json` (plus `eda_findings.md|json`). Running `make data` twice gives the
+same `data_hash` and `warehouse_content_hash`.
+
+No Kaggle account yet? `make data-sample` builds a warehouse from **synthetic (fake) data** under
+`data/synthetic/`, to try the pipeline. Its outputs are labelled as fake and are never real results.
 
 ---
 
@@ -178,4 +200,4 @@ A small, trustworthy "analytics on-call" system: it notices what changed, explai
 
 ## 10. Data licence note
 
-The planned dataset is the public *Brazilian E-Commerce Public Dataset by Olist* on Kaggle, published under CC BY-NC-SA 4.0. This is a non-commercial portfolio project. Raw data will not be committed to this repository.
+The dataset is the public *Brazilian E-Commerce Public Dataset by Olist* (Kaggle, <https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce>), published under CC BY-NC-SA 4.0. This is a non-commercial portfolio project. Raw data is not committed to this repository; any derived data shared later must carry the same licence and attribution.

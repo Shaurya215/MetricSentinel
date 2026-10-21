@@ -36,17 +36,24 @@ dev = [
     "types-pyyaml>=6.0",
 ]
 
-# Phase 2-3: warehouse, validation, forecasting, statistics, tracking.
-ds = [
+# Phase 2: ingestion, validation, warehouse build. Kept separate from `ds` so
+# CI and the data pipeline do not install the heavy forecasting stack.
+data = [
     "duckdb>=1.1",
     "pandas>=2.2",
-    "pandera>=0.22",
+    "pandera[pandas]>=0.22",
+    "holidays>=0.60",
+    "matplotlib>=3.10",
+]
+
+# Phase 3: forecasting, statistics, experiment tracking (includes `data`).
+ds = [
+    { include-group = "data" },
     "statsforecast>=2.0",
     "scipy>=1.15",
     "statsmodels>=0.14",
     "ruptures>=1.1",
     "mlflow>=2.20",
-    "matplotlib>=3.10",
 ]
 
 # Phase 4-5: agent framework, SQL safety, retrieval.
@@ -60,7 +67,7 @@ agent = [
 # Application, not a distributable library: nothing to build or install as a
 # package. Top-level modules are importable from the repository root.
 package = false
-default-groups = ["dev"]
+default-groups = ["dev", "data"]
 
 # ---------------------------------------------------------------------------
 # Ruff — linting and formatting
@@ -71,6 +78,8 @@ line-length = 100
 extend-exclude = ["data", "notebooks", ".venv"]
 
 [tool.ruff.lint]
+# E501 (line length) is left to `ruff format`; it only fires on strings it cannot wrap, mostly SQL.
+ignore = ["E501"]
 select = [
     "E",    # pycodestyle errors
     "W",    # pycodestyle warnings
@@ -84,8 +93,6 @@ select = [
     "RUF",  # ruff-specific
 ]
 
-[tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -95,7 +102,7 @@ docstring-code-format = true
 # ---------------------------------------------------------------------------
 [tool.mypy]
 python_version = "3.12"
-files = ["backend", "frontend", "core", "tests"]
+files = ["backend", "frontend", "core", "pipelines", "tests"]
 ignore_missing_imports = true
 warn_unused_configs = true
 warn_redundant_casts = true

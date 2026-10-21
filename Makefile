@@ -3,7 +3,7 @@
 # macOS and the Ubuntu CI runner. Run `make` or `make help` for the list.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup lint format test test-all data eval up down logs health clean
+.PHONY: help setup lint format test test-all data eda data-sample eval up down logs health clean
 
 PY := uv run python
 
@@ -30,8 +30,16 @@ test: ## Fast test suite (no Postgres, no warehouse, no evals)
 test-all: ## Every test, including integration (needs `make up`)
 	uv run pytest
 
-data: ## Build the DuckDB warehouse from Olist (Phase 2)
-	@echo "make data: not implemented yet - built in Phase 2 (Data ingestion, validation and EDA)." && exit 1
+data: ## Download/verify Olist and build the DuckDB warehouse + quality report
+	uv run python -m pipelines.build
+
+eda: ## Run the EDA on the built warehouse (writes data/reports/eda_findings.*)
+	uv run python -m pipelines.eda
+
+data-sample: ## Build a warehouse from FAKE data (no Kaggle needed) into data/synthetic
+	uv run python -m pipelines.synthetic --out data/synthetic --orders 30000
+	uv run python -m pipelines.build --raw-dir data/synthetic --warehouse data/synthetic/warehouse.duckdb --reports-dir data/synthetic/reports
+	uv run python -m pipelines.eda --warehouse data/synthetic/warehouse.duckdb --out data/synthetic/reports
 
 eval: ## Run the evaluation suites (Phase 3+)
 	@echo "make eval: not implemented yet - the first suite (detection) lands in Phase 3." && exit 1

@@ -896,6 +896,18 @@ wheels = [
 ]
 
 [[package]]
+name = "holidays"
+version = "0.107"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/27/f2/7aa646c4ecb198a3af80a9b3dd727cf9f2659e52cee598dcd5b8ed6d9087/holidays-0.107.tar.gz", hash = "sha256:2f02cdfbe41a5f14e053590f2385a932fe42f0c692aed75cb55601ad37cebb4d", size = 1077660, upload-time = "2026-10-19T23:35:18.493Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ac/6d/ec046c6d998d32b08cd344b8c80fad7d77d3297586e2a3f8a1b3d4476b85/holidays-0.107-py3-none-any.whl", hash = "sha256:5e4582d543b145d8ebb80ce8943e60ea5c8b6a30b74201ad0f95af0cbe67cb14", size = 1694848, upload-time = "2026-10-19T23:35:16.486Z" },
+]
+
+[[package]]
 name = "httpcore"
 version = "1.0.9"
 source = { registry = "https://pypi.org/simple" }
@@ -1246,6 +1258,13 @@ agent = [
     { name = "sentence-transformers" },
     { name = "sqlglot" },
 ]
+data = [
+    { name = "duckdb" },
+    { name = "holidays" },
+    { name = "matplotlib" },
+    { name = "pandas" },
+    { name = "pandera", extra = ["pandas"] },
+]
 dev = [
     { name = "httpx" },
     { name = "mypy" },
@@ -1257,10 +1276,11 @@ dev = [
 ]
 ds = [
     { name = "duckdb" },
+    { name = "holidays" },
     { name = "matplotlib" },
     { name = "mlflow" },
     { name = "pandas" },
-    { name = "pandera" },
+    { name = "pandera", extra = ["pandas"] },
     { name = "ruptures" },
     { name = "scipy" },
     { name = "statsforecast" },
@@ -1284,6 +1304,13 @@ agent = [
     { name = "sentence-transformers", specifier = ">=3.4" },
     { name = "sqlglot", specifier = ">=26.0" },
 ]
+data = [
+    { name = "duckdb", specifier = ">=1.1" },
+    { name = "holidays", specifier = ">=0.60" },
+    { name = "matplotlib", specifier = ">=3.10" },
+    { name = "pandas", specifier = ">=2.2" },
+    { name = "pandera", extras = ["pandas"], specifier = ">=0.22" },
+]
 dev = [
     { name = "httpx", specifier = ">=0.28" },
     { name = "mypy", specifier = ">=1.14" },
@@ -1295,10 +1322,11 @@ dev = [
 ]
 ds = [
     { name = "duckdb", specifier = ">=1.1" },
+    { name = "holidays", specifier = ">=0.60" },
     { name = "matplotlib", specifier = ">=3.10" },
     { name = "mlflow", specifier = ">=2.20" },
     { name = "pandas", specifier = ">=2.2" },
-    { name = "pandera", specifier = ">=0.22" },
+    { name = "pandera", extras = ["pandas"], specifier = ">=0.22" },
     { name = "ruptures", specifier = ">=1.1" },
     { name = "scipy", specifier = ">=1.15" },
     { name = "statsforecast", specifier = ">=2.0" },
@@ -1766,6 +1794,12 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/47/7a/702612a2b5e3335722395d6de71206549f64a43588527f411ff60a7c3456/pandera-0.33.1.tar.gz", hash = "sha256:909e2e269a3f9c17d94c11268f92a5f48e889af633ea1414053993874d613626", size = 976019, upload-time = "2026-09-01T15:56:07.34Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d2/84/107a480f7aa34a6878fb4fb85cda66f37e8aaee769c5917e3eaa2d55222e/pandera-0.33.1-py3-none-any.whl", hash = "sha256:8283bc12f7c85f0b429107d71b55150205f7e5ca59d68117aff971273a3bd2d8", size = 501976, upload-time = "2026-09-01T15:56:05.944Z" },
+]
+
+[package.optional-dependencies]
+pandas = [
+    { name = "numpy" },
+    { name = "pandas" },
 ]
 
 [[package]]

@@ -16,7 +16,7 @@ WORKDIR /app
 # download cache lives in a BuildKit cache mount, so it speeds up rebuilds
 # without being baked into the image.
 COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-default-groups
 
 COPY . .
 

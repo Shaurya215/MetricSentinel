@@ -1,7 +1,8 @@
 # Data Plan — MetricSentinel
 
-> Status: Phase 0 planning document. No data has been downloaded or processed yet.
-> Items marked *confirm in EDA* are expectations that Phase 2 must verify.
+> Status: Phase 2 in progress. The pipeline described here is implemented and tested on synthetic data.
+> No real Olist data has been processed yet, so everything marked *confirm in EDA* is still an expectation.
+> Section 14 records what was implemented and what is still pending.
 
 ## 1. Data sources
 
@@ -196,3 +197,36 @@ Splits are made **by template family**, so paraphrases of a test question cannot
 | Scenario definitions | Git (YAML) |
 | Eval question sets | Git (small JSONL files) |
 | Synthetic training data (EXT) | DVC or Hugging Face dataset repo — decided in Phase 8 |
+
+## 14. Phase 2 implementation notes and EDA status
+
+### Implemented (verified on synthetic data only)
+
+| Item | Where |
+|---|---|
+| Download from a manual zip or the Kaggle API; credentials are not forwarded to the redirect target | `pipelines/download.py` |
+| `raw` layer: every CSV loaded as text, unchanged, plus `raw._load_metadata` | `pipelines/build.py` |
+| Hard checks (Pandera schemas, foreign keys, published row counts +/-1%) stop the build before any model runs | `pipelines/validate.py` |
+| `staging` and `marts` SQL models, run in filename order | `pipelines/sql_models/` |
+| Soft checks, statistics, mart integrity checks, `data_hash`, `warehouse_content_hash`, HTML and JSON report | `pipelines/quality.py` |
+| EDA: monitoring window, seasonality, KPI distributions, segment sizes, sample-size rule, expected-issue verdicts | `pipelines/eda.py`, `notebooks/01_eda.ipynb` |
+
+### Decisions made while implementing
+
+- **Atomic build.** The warehouse is built in a temporary file and replaces the real one only if every hard check passes.
+- **Money is `DECIMAL(12,2)`**, so sums are exact and the content hash does not depend on summation order.
+- **Pseudonymisation.** `customer_id` becomes `customer_ref` and `customer_unique_id` becomes `customer_key`, both salted SHA-256 (first 32 hex characters). Zip prefixes are dropped in staging. The salt comes from `PSEUDONYM_SALT`; the default is public and for development only.
+- **Customer state.** `fct_orders.customer_state` is the state at the time of the order. `dim_customers` holds the latest known state per person. Use the order-level column for analysis.
+- **`is_delivered`** is `status = 'delivered'` and a delivery timestamp exists. **`is_late`** compares calendar dates (delivered date later than estimated date).
+- **Primary payment** is the payment with the largest value (ties: lowest sequence number).
+- **Seller tier** (`marts.seller_tier_daily`) uses only the 90 days *before* each day, so a day cannot influence its own tier. Tiers are `T1`..`T4` (T4 = top quartile of GMV among sellers with GMV in the window) or `unrated`. This adds a fifth value to a dimension the plan expected to have four; Phase 3 must decide whether to monitor `unrated`.
+- **`data_hash`** covers raw file checksums, a hash of the SQL model files' contents, the metric catalogue (once `config/metrics.yaml` exists), the `holidays` package version and a fingerprint of the salt. `warehouse_content_hash` additionally hashes the rows of every mart, and proves a rebuild is identical. Windows and Linux produce the same values for the same input.
+- **Soft checks run after the marts are built**, not between staging and marts as the diagram shows, because two of them need mart tables. They never stop the build.
+
+### Still pending (needs the real dataset)
+
+1. Run `make data`; commit `data/raw/checksums.json`.
+2. Run `make eda` and execute `notebooks/01_eda.ipynb`. Replace this paragraph with the confirmed monitoring window, warm-up start, minimum-sample rule and the confirm/refute verdict for each issue in section 3.
+3. Review the PROVISIONAL values in `pipelines/config.py`: the delivered-without-date threshold, the unknown-category threshold and the monitoring window used by the "no gaps" soft check.
+4. Confirm the published row counts in `pipelines/config.py` against the downloaded files (the hard check allows +/-1%).
+5. The CSV reader uses DuckDB's strict parsing. It is tested on a review with an embedded newline and quotes, but not on the real `olist_order_reviews_dataset.csv`.

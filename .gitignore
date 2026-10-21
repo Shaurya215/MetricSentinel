@@ -29,6 +29,8 @@ data/raw/*
 data/warehouse/*
 data/reports/*
 data/scenarios/*.json
+# FAKE data and anything built from it (make data-sample); never commit it.
+data/synthetic/
 !data/raw/checksums.json
 # Keep the directory layout (and its READMEs) in the repository.
 !data/**/.gitkeep
