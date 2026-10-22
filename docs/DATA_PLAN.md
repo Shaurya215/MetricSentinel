@@ -223,10 +223,81 @@ Splits are made **by template family**, so paraphrases of a test question cannot
 - **`data_hash`** covers raw file checksums, a hash of the SQL model files' contents, the metric catalogue (once `config/metrics.yaml` exists), the `holidays` package version and a fingerprint of the salt. `warehouse_content_hash` additionally hashes the rows of every mart, and proves a rebuild is identical. Windows and Linux produce the same values for the same input.
 - **Soft checks run after the marts are built**, not between staging and marts as the diagram shows, because two of them need mart tables. They never stop the build.
 
-### Still pending (needs the real dataset)
+### Real-data results (first run, 2026-10-22; `data_hash` 97f3df47619c210e00643e5ab90d66ae22a0ffe3d0a568403a6d029263da58e3)
 
-1. Run `make data`; commit `data/raw/checksums.json`.
-2. Run `make eda` and execute `notebooks/01_eda.ipynb`. Replace this paragraph with the confirmed monitoring window, warm-up start, minimum-sample rule and the confirm/refute verdict for each issue in section 3.
-3. Review the PROVISIONAL values in `pipelines/config.py`: the delivered-without-date threshold, the unknown-category threshold and the monitoring window used by the "no gaps" soft check.
-4. Confirm the published row counts in `pipelines/config.py` against the downloaded files (the hard check allows +/-1%).
-5. The CSV reader uses DuckDB's strict parsing. It is tested on a review with an embedded newline and quotes, but not on the real `olist_order_reviews_dataset.csv`.
+The Kaggle dataset was downloaded and `make data` + `make eda` were run on it. Every hard check passed (38 of 38).
+A second build produced the same `data_hash` and `warehouse_content_hash`. The published row counts used in
+`pipelines/config.py` matched the files exactly, and the real reviews file (multi-line comments) parsed correctly.
+
+**Warehouse sizes:** 99,441 orders, 112,650 items, 103,886 payments, 98,673 reviews (after keeping one per order),
+96,096 distinct customers, 3,095 sellers, 32,951 products.
+
+**Monitoring window (derived, not assumed).** Dense day = 7-day mean at least max(20, 0.25 x median daily orders)
+(floor 37 orders; median day 148 orders). Longest run: **2017-01-26 to 2018-08-31** (583 days). Warm-up starts
+2017-01-26; the first detection date is **2017-04-26** (90 warm-up days); **493 days** are monitored. 51 days with
+orders fall outside the window (the sparse start and the end of the data).
+
+**Expected issues in section 3: all nine confirmed.**
+
+| Issue | Observed |
+|---|---|
+| Sparse start and cut-off | 51 days with orders outside the dense window |
+| Delivered, no delivery date | 8 orders (0.0083% of 96,478 delivered) |
+| Several reviews per order | 547 orders; 99,224 review rows reduced to 98,673 |
+| `review_id` reused across orders | 789 review ids |
+| Orders with no items | 775 (0.78%) |
+| Orders with no payment | 1 |
+| Unknown category | 610 products with no category + 13 with no translation = 623 products; 1.44% of items |
+| `payment_type = not_defined` | 3 payment rows |
+| Geolocation many rows per zip | 1,000,163 rows for 19,015 prefixes |
+
+**Seasonality (inside the window).** Weekday effect is strong: Monday 1.15, Tuesday 1.13, Wednesday 1.10, Saturday 0.77,
+Sunday 0.85 (1.0 = average day); busiest/quietest ratio 1.49. Brazilian public holidays have 0.75x the orders of a
+normal day. **Black Friday 2017 (2017-11-24) had 6.4x the orders of the previous three weeks' average**, so the
+forecasting model must know about it or the detector will raise a false alarm on that day and on the days after it.
+
+**Daily KPI behaviour (inside the window).**
+
+| KPI | mean | coefficient of variation | days with n >= 30 |
+|---|---|---|---|
+| orders | 169 | 0.52 | n/a |
+| gmv | 23,200 | 0.52 | n/a |
+| aov | 139 | 0.18 | 99% |
+| freight_ratio | 0.166 | 0.15 | 99% |
+| late_delivery_rate | 6.8% | 1.27 | 80% |
+| avg_delivery_days | 12.8 | 0.29 | 80% |
+| avg_review_score | 4.06 | 0.10 | 82% |
+| low_review_rate | 15.3% | 0.71 | 82% |
+
+`late_delivery_rate` and `low_review_rate` are very noisy day to day (coefficient of variation above 0.7), so a
+plain interval test on them will be sensitive to noise; Phase 3 should treat them as rates with a binomial model
+or smooth them.
+
+**Dimensions.** `customer_state` 27 values, `category_en` 72, `payment_type` 5 (as expected). `seller_tier` has 5 values
+because of `unrated` (see the seller-tier decision above).
+
+**Minimum-sample rule, with evidence.** Rule: a series is monitored daily if at least 80% of window days have n >= 30,
+weekly if at least 80% of weeks do, otherwise excluded.
+
+| dimension | values | daily | weekly | excluded (orders as the sample) |
+|---|---|---|---|---|
+| customer_state | 27 | 1 | 4 | 22 |
+| category_en | 72 | 0 | 6 | 66 |
+| payment_type | 5 | 1 | 1 | 3 |
+| seller_tier | 5 | 1 | 4 | 0 |
+
+The same pattern holds when deliveries or reviews are the sample (see `data/reports/eda_findings.md`).
+**This is the most important finding for Phase 3:** the plan assumed about 8 KPIs x 4 dimensions of segment series,
+but with a 30-per-day sample rule almost all state and category segments are too small to monitor daily. Only the
+total series and three segments qualify for daily monitoring: state `SP` (87% of days), payment type `credit_card`
+(98%) and seller tier `T4` (95%). Even the largest category (`bed_bath_table`) averages only 16 orders a day. Note the table above applies the 30-sample rule to order counts too, although the plan sets no minimum
+for `orders` and `gmv`. Phase 3 has to choose between weekly granularity for small segments, pooling small segments,
+or a lower sample rule for count KPIs; this is recorded as an open decision, not decided here.
+
+**Thresholds set from this run** (`pipelines/config.py`): delivered-without-date soft limit 0.1% (observed 0.0083%),
+unknown-category soft limit 2.5% (observed 1.44%), and the "no gaps" check now uses the window above (0 gap days).
+
+### Still open
+
+1. The notebook `notebooks/01_eda.ipynb` has no stored outputs (no Jupyter dependency was added). All numbers above come from `pipelines/eda.py`; run `make eda` to regenerate `data/reports/eda_findings.md`.
+2. Open design decision for Phase 3: how to monitor small segments (see the minimum-sample finding).

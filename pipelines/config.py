@@ -1,8 +1,7 @@
 """Constants for the data pipeline: source files, expected sizes, thresholds.
 
-Anything marked PROVISIONAL is a starting value that the EDA (`pipelines/eda.py`,
-run against the real Olist data) must confirm or replace. Those values are not
-findings; the real-data EDA has not been run yet.
+Thresholds below were set from the first real-data run (data_hash 97f3df47...,
+see docs/DATA_PLAN.md section 14). Re-check them if the dataset ever changes.
 """
 
 from __future__ import annotations
@@ -57,11 +56,13 @@ ORDER_STATUSES = frozenset(
 )
 PAYMENT_TYPES = frozenset({"credit_card", "boleto", "voucher", "debit_card", "not_defined"})
 
-# ---- Soft-check thresholds (PROVISIONAL, to be set from the real-data EDA) ----
-SOFT_MAX_DELIVERED_MISSING_DATE_RATE = 0.005
-SOFT_MAX_UNKNOWN_CATEGORY_SHARE = 0.03
-# Window used by the "no gaps in daily order counts" soft check (PROVISIONAL).
-PROVISIONAL_MONITORING_WINDOW = ("2017-01-05", "2018-08-20")
+# ---- Soft-check thresholds, set from the real-data EDA ----
+# Observed: 8 of 96,478 delivered orders (0.0083%) lack a delivery date; limit ~12x that.
+SOFT_MAX_DELIVERED_MISSING_DATE_RATE = 0.001
+# Observed: 1.44% of items map to category 'unknown'; limit ~1.7x that.
+SOFT_MAX_UNKNOWN_CATEGORY_SHARE = 0.025
+# Dense monitoring window found by the EDA (pipelines/eda.py); used by the "no gaps" soft check.
+MONITORING_WINDOW = ("2017-01-26", "2018-08-31")
 
 SELLER_TIER_WINDOW_DAYS = 90
 REVIEW_TEXT_MAX_CHARS = 500

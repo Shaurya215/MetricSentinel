@@ -2,10 +2,10 @@
 
 **Autonomous KPI anomaly detection and root-cause investigation, with grounded reports and human approval.**
 
-> **Status: Phase 2 — Data ingestion, validation & EDA (code complete; awaiting the first run on the real dataset).**
-> The data pipeline is built and tested on *synthetic* data only. It has not yet been run on the real Olist
-> data, so no data-quality result, EDA finding or KPI number exists yet. Every capability below is still *planned*
-> until it is verified on real data.
+> **Status: Phase 2 — Data ingestion, validation & EDA (complete).**
+> The data pipeline has been run on the real Olist dataset: all hard checks pass and rebuilds are identical.
+> The data-quality and EDA findings are in `docs/DATA_PLAN.md` section 14. Anomaly detection, the agent and the
+> rest are still *planned*; nothing about them is implemented yet.
 
 ---
 

@@ -1,7 +1,7 @@
 # Roadmap — MetricSentinel
 
-> Current phase: **Phase 2 — Data Ingestion, Validation & EDA** (code complete and tested on synthetic data; the first run on the real dataset and the real EDA findings are still outstanding).
-> Phases 0 and 1 are complete (Phase 1 CI is green on `main`). No MetricSentinel feature has been verified on real data yet.
+> Current phase: **Phase 3 — Metric Store, Forecasting & Anomaly Detection** (not started; waiting for the owner).
+> Phases 0, 1 and 2 are complete. Phase 2 was verified on the real Olist data (see `docs/DATA_PLAN.md` section 14).
 > Durations are part-time estimates, not commitments.
 
 ## Overview
@@ -90,9 +90,9 @@ flowchart LR
 
 ---
 
-## Phase 2 — Data Ingestion, Validation & EDA *(current)*
+## Phase 2 — Data Ingestion, Validation & EDA *(complete)*
 
-**Status:** pipeline, tests and EDA tooling are built and pass on synthetic data. **Outstanding before this phase can be closed:** (1) run `make data` on the real Olist data and commit `data/raw/checksums.json`; (2) run `make eda` / execute `notebooks/01_eda.ipynb` and record the confirmed facts in `docs/DATA_PLAN.md` section 14; (3) review the soft-check thresholds that are marked PROVISIONAL.
+**Status: complete (2026-10-22).** Run on the real Olist data: 38 of 38 hard checks pass, two builds give the same `data_hash`, and the EDA states the monitoring window, warm-up start and minimum-sample rule with evidence. The one stored-output gap (the notebook has no outputs) is listed in `docs/DATA_PLAN.md` section 14.
 
 **Objective:** A reproducible warehouse built from Olist, with known data quality and an EDA that informs the detection design.
 
@@ -118,7 +118,9 @@ flowchart LR
 
 ---
 
-## Phase 3 — Metric Store, Forecasting & Anomaly Detection
+## Phase 3 — Metric Store, Forecasting & Anomaly Detection *(next)*
+
+**Input from Phase 2 to settle first:** the real EDA shows most state and category segments are too small for daily monitoring under the 30-sample rule, and Black Friday 2017 is 6.4x a normal day. See `docs/DATA_PLAN.md` section 14.
 
 **Objective:** Detect real KPI anomalies with controlled false alarms, and prove it on labelled faults.
 
@@ -378,3 +380,6 @@ MetricSentinel/
 | 2026-10-21 | Checksums are trust-on-first-use (`data/raw/checksums.json` is written by the first successful load); row counts are checked against the published Olist counts | The real files could not be downloaded without Kaggle credentials when Phase 2 was built |
 | 2026-10-21 | Added `marts.seller_tier_daily` (point-in-time seller tier) and `meta.build` to the warehouse | Required by DATA_PLAN section 5; not in the original table list |
 | 2026-10-21 | `marts_scn` (scenario copy of the marts) is not created in Phase 2 | It belongs to the fault injector (Phase 3) |
+| 2026-10-22 | Phase 2 run on the real Olist data and closed: all hard checks pass, rebuilds identical, EDA findings recorded in DATA_PLAN section 14, `checksums.json` committed | Phase 2 Definition of Done |
+| 2026-10-22 | Soft-check thresholds and the monitoring window in `pipelines/config.py` changed from provisional guesses to values set from the real data | EDA task |
+| 2026-10-22 | Open decision for Phase 3 recorded: how to monitor segments too small for the 30-per-day sample rule | EDA finding |

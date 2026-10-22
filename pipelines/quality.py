@@ -17,7 +17,7 @@ from typing import Any
 import duckdb
 
 from pipelines.config import (
-    PROVISIONAL_MONITORING_WINDOW,
+    MONITORING_WINDOW,
     SOFT_MAX_DELIVERED_MISSING_DATE_RATE,
     SOFT_MAX_UNKNOWN_CATEGORY_SHARE,
     SQL_DIR,
@@ -66,7 +66,7 @@ def soft_checks(con: duckdb.DuckDBPyConnection) -> list[CheckResult]:
             table="staging.orders",
             passed=rate <= SOFT_MAX_DELIVERED_MISSING_DATE_RATE,
             observed=round(rate, 6),
-            threshold=f"<= {SOFT_MAX_DELIVERED_MISSING_DATE_RATE} (PROVISIONAL)",
+            threshold=f"<= {SOFT_MAX_DELIVERED_MISSING_DATE_RATE}",
             detail=f"{missing} of {delivered} delivered orders have no delivery date; "
             "they are excluded from delivery KPIs",
         )
@@ -85,12 +85,12 @@ def soft_checks(con: duckdb.DuckDBPyConnection) -> list[CheckResult]:
             table="marts.fct_order_items",
             passed=share <= SOFT_MAX_UNKNOWN_CATEGORY_SHARE,
             observed=round(share, 6),
-            threshold=f"<= {SOFT_MAX_UNKNOWN_CATEGORY_SHARE} (PROVISIONAL)",
+            threshold=f"<= {SOFT_MAX_UNKNOWN_CATEGORY_SHARE}",
             detail=f"{unknown} of {items} items map to category 'unknown'",
         )
     )
 
-    start, end = PROVISIONAL_MONITORING_WINDOW
+    start, end = MONITORING_WINDOW
     gaps = con.execute(
         "WITH window_days AS ("
         "  SELECT date FROM marts.dim_date WHERE date BETWEEN ? AND ?), "
@@ -106,8 +106,8 @@ def soft_checks(con: duckdb.DuckDBPyConnection) -> list[CheckResult]:
             table="marts.fct_orders",
             passed=len(gaps) == 0,
             observed=len(gaps),
-            threshold=f"0 days without orders in {start}..{end} (PROVISIONAL window)",
-            detail=f"{len(gaps)} day(s) with zero orders inside the provisional window",
+            threshold=f"0 days without orders in {start}..{end}",
+            detail=f"{len(gaps)} day(s) with zero orders inside the monitoring window",
             examples=[str(g[0]) for g in gaps[:5]],
         )
     )

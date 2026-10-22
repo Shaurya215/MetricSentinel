@@ -4,7 +4,7 @@ The Phase 2 data pipeline: Olist CSVs -> verified raw files -> DuckDB warehouse 
 
 | Module | Job |
 |---|---|
-| `config.py` | Source files, published row counts, allowed values, thresholds (PROVISIONAL ones are marked) |
+| `config.py` | Source files, published row counts, allowed values, thresholds (set from the real-data EDA) |
 | `download.py` | Find the data (CSV, zip, or Kaggle API), verify checksums (trust on first use) |
 | `validate.py` | Hard checks: Pandera schemas, foreign keys, row counts |
 | `sql_models/staging/`, `sql_models/marts/` | The transformations, as plain SQL files run in filename order |
