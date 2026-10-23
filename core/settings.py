@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     kaggle_key: SecretStr | None = None
 
     # ---- Experiment tracking (used from Phase 3) ----
-    mlflow_tracking_uri: str = f"file://{(REPO_ROOT / 'mlruns').as_posix()}"
+    mlflow_tracking_uri: str = f"sqlite:///{(REPO_ROOT / 'mlruns' / 'mlflow.db').as_posix()}"
 
     # ---- Models (used from Phase 4; unset means that provider is unavailable) ----
     gemini_api_key: SecretStr | None = None

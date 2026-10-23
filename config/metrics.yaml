@@ -1,0 +1,143 @@
+# Metric catalogue (FR-010). The single source of truth for what each KPI means.
+# It is also indexed for retrieval (Phase 4), so the agent reads these definitions
+# instead of guessing them.
+#
+# How a KPI is computed, for the total and for every segment:
+#   numerator   = SQL aggregate over the KPI's source rows
+#   denominator = SQL aggregate (absent for count/sum KPIs)
+#   value       = numerator / denominator, or numerator when there is no denominator
+#   n           = sample size (FR-012) = the `sample` aggregate
+# Because only sums are stored, totals, segments, pooled segments and weekly
+# values are all exact sums of the same parts.
+#
+# Sources (built by ds/metric_store.py, one row per event):
+#   orders      one row per order, dated by purchase date
+#   deliveries  one row per delivered order (status delivered AND a delivery date), dated by delivery date
+#   reviews     one row per review (one per order), dated by review creation date
+# Every row carries the order's dimension values (see `dimensions` below).
+#
+# alert_direction: which deviations raise an alert. It is `both` for the two volume
+# KPIs, because a pipeline bug that duplicates rows shows up as a spike even though
+# the business "bad" direction is down.
+
+version: 1
+
+dimensions:
+  customer_state:
+    description: Customer's state at the time of the order (27 Brazilian states).
+  payment_type:
+    description: Primary payment type of the order (the payment with the largest value).
+  category_en:
+    description: >-
+      Primary category of the order: the category of its most expensive item (ties: lowest
+      item number). Assigning one category per order keeps segments additive.
+  seller_tier:
+    description: >-
+      Point-in-time tier (T1..T4, or unrated) of the seller of the order's most expensive item,
+      as of the purchase date. Uses only the 90 days before that date.
+
+kpis:
+  - name: orders
+    description: Number of orders placed.
+    unit: orders
+    family: count
+    source: orders
+    numerator: "count(*)"
+    sample: "count(*)"
+    bad_direction: down
+    alert_direction: both
+    min_sample: 10
+    owner: Commercial operations
+
+  - name: gmv
+    description: Gross merchandise value, the sum of item prices (freight excluded). Orders without items are excluded.
+    unit: BRL
+    family: sum
+    source: orders
+    filter: "has_items"
+    numerator: "sum(order_gmv)"
+    sample: "count(*)"
+    bad_direction: down
+    alert_direction: both
+    min_sample: 10
+    owner: Commercial operations
+
+  - name: aov
+    description: Average order value, GMV divided by the number of orders with items.
+    unit: BRL per order
+    family: ratio
+    source: orders
+    filter: "has_items"
+    numerator: "sum(order_gmv)"
+    denominator: "count(*)"
+    sample: "count(*)"
+    bad_direction: down
+    alert_direction: down
+    min_sample: 30
+    owner: Commercial operations
+
+  - name: freight_ratio
+    description: Freight charged as a share of item value.
+    unit: ratio
+    family: ratio
+    source: orders
+    filter: "has_items"
+    numerator: "sum(freight_total)"
+    denominator: "sum(order_gmv)"
+    sample: "count(*)"
+    bad_direction: up
+    alert_direction: up
+    min_sample: 30
+    owner: Logistics
+
+  - name: late_delivery_rate
+    description: Share of delivered orders that arrived on a later calendar date than estimated.
+    unit: share
+    family: rate
+    source: deliveries
+    numerator: "sum(CAST(is_late AS INTEGER))"
+    denominator: "count(*)"
+    sample: "count(*)"
+    bad_direction: up
+    alert_direction: up
+    min_sample: 30
+    owner: Logistics
+
+  - name: avg_delivery_days
+    description: Mean days from purchase to delivery, for orders delivered that day.
+    unit: days
+    family: mean
+    source: deliveries
+    numerator: "sum(delivery_days)"
+    denominator: "count(*)"
+    sample: "count(*)"
+    bad_direction: up
+    alert_direction: up
+    min_sample: 30
+    owner: Logistics
+
+  - name: avg_review_score
+    description: Mean review score (1-5) of reviews created that day.
+    unit: score
+    family: mean
+    source: reviews
+    numerator: "sum(score)"
+    denominator: "count(*)"
+    sample: "count(*)"
+    bad_direction: down
+    alert_direction: down
+    min_sample: 30
+    owner: Customer experience
+
+  - name: low_review_rate
+    description: Share of reviews with a score of 1 or 2.
+    unit: share
+    family: rate
+    source: reviews
+    numerator: "sum(CAST(score <= 2 AS INTEGER))"
+    denominator: "count(*)"
+    sample: "count(*)"
+    bad_direction: up
+    alert_direction: up
+    min_sample: 30
+    owner: Customer experience

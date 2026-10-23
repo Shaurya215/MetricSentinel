@@ -1,0 +1,41 @@
+# Detection configuration. Dates come from the Phase 2 EDA on the real data
+# (docs/DATA_PLAN.md section 14).
+
+monitoring_window:
+  start: 2017-01-26 # warm-up start (first dense day)
+  end: 2018-08-31
+
+# The time split. Model selection and interval calibration use ONLY the backtest
+# period. The evaluation period is held back for the fault benchmark and the
+# clean false-alarm run, so the detector is never tuned on the data it is scored on.
+backtest:
+  start: 2017-04-26 # first detection date = warm-up start + 90 days
+  end: 2017-12-31
+evaluation:
+  start: 2018-01-01
+  end: 2018-08-31
+
+# Which segments are monitored, and how (decided on clean data only, over the monitoring window):
+#   daily    if >= coverage of days have n >= the KPI's min_sample
+#   weekly   else if >= coverage of weeks do
+#   pooled   otherwise: the segment is summed into one "__other__" series per dimension,
+#            which is itself classified daily / weekly / excluded by the same rule.
+sample_rule:
+  coverage: 0.80
+
+forecast:
+  refit_every_days: 7 # weekly re-fit; each fit forecasts the next 7 days
+  interval_level: 95
+  daily_season_length: 7
+  weekly_season_length: 1 # too few weeks of history for yearly seasonality
+
+detection:
+  fdr_q: 0.05 # Benjamini-Hochberg across all series tested on a day
+
+# Known business events. Their values are removed (interpolated) before training, and
+# no alert is raised on them. Phase 2 EDA: Black Friday 2017 had 6.4x a normal day; orders
+# stayed elevated from Thursday 23 to Wednesday 29 November (checked in the daily counts).
+events:
+  - name: black_friday_2017
+    start: 2017-11-23
+    end: 2017-11-29

@@ -336,6 +336,71 @@ def mart_checks(con: duckdb.DuckDBPyConnection) -> list[CheckResult]:
     return results
 
 
+def metric_checks(con: duckdb.DuckDBPyConnection) -> list[CheckResult]:
+    """Hard checks on the metric store: segments must add up to the total."""
+    mismatched = _one(
+        con,
+        """
+        WITH seg AS (
+            SELECT kpi, dimension, date, sum(numerator) AS num, sum(n) AS n
+            FROM metrics.daily_kpi WHERE dimension <> 'total' AND segment <> '__other__'
+            GROUP BY ALL
+        )
+        SELECT count(*) FROM seg JOIN metrics.daily_kpi t
+          ON t.kpi = seg.kpi AND t.date = seg.date AND t.dimension = 'total'
+        WHERE abs(t.numerator - seg.num) > 1e-6 * greatest(1, abs(t.numerator)) OR t.n <> seg.n
+        """,
+    )
+    pooled = _one(
+        con,
+        """
+        WITH members AS (
+            SELECT k.kpi, k.dimension, k.date, sum(k.n) AS n FROM metrics.daily_kpi k
+            JOIN metrics.series_plan p USING (kpi, dimension, segment)
+            WHERE p.granularity = 'pooled' GROUP BY ALL
+        )
+        SELECT count(*) FROM members m JOIN metrics.daily_kpi o
+          ON o.kpi = m.kpi AND o.dimension = m.dimension AND o.date = m.date AND o.segment = '__other__'
+        WHERE o.n <> m.n
+        """,
+    )
+    monitored = _one(
+        con, "SELECT count(*) FROM metrics.series_plan WHERE granularity IN ('daily', 'weekly')"
+    )
+    return [
+        CheckResult(
+            name="segments_sum_to_total",
+            level="hard",
+            table="metrics.daily_kpi",
+            passed=mismatched == 0,
+            observed=mismatched,
+            threshold=0,
+            detail="ok"
+            if mismatched == 0
+            else f"{mismatched} kpi x dimension x day(s) do not add up to the total",
+        ),
+        CheckResult(
+            name="pooled_series_equal_their_members",
+            level="hard",
+            table="metrics.daily_kpi",
+            passed=pooled == 0,
+            observed=pooled,
+            threshold=0,
+            detail="ok"
+            if pooled == 0
+            else f"{pooled} day(s) where __other__ differs from its members",
+        ),
+        CheckResult(
+            name="monitored_series",
+            level="stat",
+            table="metrics.series_plan",
+            passed=None,
+            observed=monitored,
+            detail=f"monitored series (daily + weekly): {monitored}",
+        ),
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Table profiles
 # ---------------------------------------------------------------------------

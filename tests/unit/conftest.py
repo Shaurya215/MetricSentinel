@@ -81,3 +81,18 @@ def copy_dataset(small_raw: Path, tmp_path: Path) -> Callable[[], Path]:
         return target
 
     return _copy
+
+
+@pytest.fixture(scope="session")
+def dense_built(tmp_path_factory: pytest.TempPathFactory) -> BuildResult:
+    """A denser fake warehouse (~20k orders) so segments, forecasts and detection have data."""
+    raw = tmp_path_factory.mktemp("dense_raw_shared")
+    synthetic.generate(raw, n_orders=20_000, n_sellers=60, n_products=150)
+    return build_synthetic(raw, tmp_path_factory.mktemp("dense_built_shared"))
+
+
+@pytest.fixture
+def dense_con(dense_built: BuildResult) -> Iterator[duckdb.DuckDBPyConnection]:
+    connection = duckdb.connect(str(dense_built.warehouse_path), read_only=True)
+    yield connection
+    connection.close()

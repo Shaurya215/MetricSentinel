@@ -23,6 +23,7 @@ import holidays
 
 from core.logging import configure_logging, get_logger, run_context
 from core.settings import REPO_ROOT, get_settings
+from ds.metric_store import build_metric_store, ensure_scenario_schema
 from pipelines import quality, validate
 from pipelines.config import REVIEW_TEXT_MAX_CHARS, SELLER_TIER_WINDOW_DAYS, SQL_DIR
 from pipelines.db import first_row
@@ -203,6 +204,14 @@ def build(
         run_sql_dir(con, SQL_DIR / "marts", params)
 
         checks += quality.mart_checks(con)
+        hard_failures = validate.failed(checks)
+        if hard_failures:
+            raise _fail(report, checks, hard_failures, reports_dir)
+
+        # Metric store (Phase 3): marts_scn = marts in normal mode, then daily/weekly KPIs.
+        ensure_scenario_schema(con)
+        build_metric_store(con)
+        checks += quality.metric_checks(con)
         hard_failures = validate.failed(checks)
         if hard_failures:
             raise _fail(report, checks, hard_failures, reports_dir)

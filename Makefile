@@ -3,7 +3,7 @@
 # macOS and the Ubuntu CI runner. Run `make` or `make help` for the list.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup lint format test test-all data eda data-sample eval up down logs health clean
+.PHONY: help setup lint format test test-all data eda data-sample backtest detect scenarios eval-detection eval up down logs health clean
 
 PY := uv run python
 
@@ -41,8 +41,19 @@ data-sample: ## Build a warehouse from FAKE data (no Kaggle needed) into data/sy
 	uv run python -m pipelines.build --raw-dir data/synthetic --warehouse data/synthetic/warehouse.duckdb --reports-dir data/synthetic/reports
 	uv run python -m pipelines.eda --warehouse data/synthetic/warehouse.duckdb --out data/synthetic/reports
 
-eval: ## Run the evaluation suites (Phase 3+)
-	@echo "make eval: not implemented yet - the first suite (detection) lands in Phase 3." && exit 1
+backtest: ## Rolling-origin forecast backtest on 2017; writes config/detector.json (Phase 3)
+	uv run python -m ds.backtest
+
+detect: ## Detect anomalies for one simulated day: make detect DATE=2018-03-05
+	uv run python -m ds.detect --date $(DATE)
+
+scenarios: ## Regenerate the 30-scenario fault benchmark (config/scenarios/mvp.yaml)
+	uv run python -m pipelines.faults generate
+
+eval-detection: ## Detection evaluation on the fault benchmark + clean 2018 days
+	uv run python -m evaluation.detection
+
+eval: eval-detection ## Run every evaluation suite that exists so far
 
 up: ## Build images and start Postgres, API and UI
 	docker compose up -d --build --wait

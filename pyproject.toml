@@ -67,7 +67,7 @@ agent = [
 # Application, not a distributable library: nothing to build or install as a
 # package. Top-level modules are importable from the repository root.
 package = false
-default-groups = ["dev", "data"]
+default-groups = ["dev", "data", "ds"]
 
 # ---------------------------------------------------------------------------
 # Ruff — linting and formatting
@@ -102,7 +102,7 @@ docstring-code-format = true
 # ---------------------------------------------------------------------------
 [tool.mypy]
 python_version = "3.12"
-files = ["backend", "frontend", "core", "pipelines", "tests"]
+files = ["backend", "frontend", "core", "pipelines", "ds", "evaluation", "tests"]
 ignore_missing_imports = true
 warn_unused_configs = true
 warn_redundant_casts = true
