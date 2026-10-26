@@ -31,8 +31,10 @@ import pandas as pd
 from scipy.stats import norm
 from statsmodels.stats.multitest import multipletests
 
+from core.logging import get_logger
 from core.settings import REPO_ROOT
 from ds.catalogue import Catalogue, DetectionConfig
+from ds.feed_guard import apply_guard, total_orders
 from ds.forecasting import ForecastSpec, forecast_origins, mondays
 
 DETECTOR_PATH = REPO_ROOT / "config" / "detector.json"
@@ -207,6 +209,9 @@ def detect_day(scored_day: pd.DataFrame, cfg: DetectionConfig) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=ANOMALY_COLUMNS)
 
 
+log = get_logger(__name__)
+
+
 def detect_range(
     series: pd.DataFrame,
     forecasts: pd.DataFrame,
@@ -214,8 +219,38 @@ def detect_range(
     detector: Detector,
     catalogue: Catalogue,
     cfg: DetectionConfig,
+    diagnostics: dict[str, Any] | None = None,
 ) -> tuple[pd.DataFrame, int]:
-    """Detect on every day in `days`. Returns the anomalies and the number of tests run."""
+    """Detect on every day in `days`. Returns the anomalies and the number of tests run.
+
+    With `improvements.feed_guard` on (change A), a day is first checked by the volume-collapse
+    guard: a collapse day raises one guard alert and no other test runs that day, and a day past
+    the last reliable day is not tested and raises nothing. Suppressed days are logged and, when
+    `diagnostics` is given, returned in it (`guard_collapse`, `guard_past_data_end`). With every
+    flag off this function does exactly what it did in Phase 3.
+    """
+    guard_alerts: list[dict[str, Any]] = []
+    if cfg.improvements.feed_guard:
+        guard = apply_guard(total_orders(series), days, cfg.feed_guard)
+        days = guard.testable_days
+        guard_alerts = guard.alerts
+        for hit in guard.collapse:
+            log.info(
+                "feed_guard_suppressed",
+                reason="volume collapse",
+                **{k: str(v) for k, v in hit.items()},
+            )
+        if guard.past_data_end:
+            log.info(
+                "feed_guard_suppressed",
+                reason="past the last reliable day",
+                first=str(guard.past_data_end[0]),
+                days=len(guard.past_data_end),
+            )
+        if diagnostics is not None:
+            diagnostics["guard_collapse"] = guard.collapse
+            diagnostics["guard_past_data_end"] = guard.past_data_end
+
     wanted = {pd.Timestamp(d) for d in days}
     obs = series[series["ds"].isin(wanted)]
     points = obs.merge(
@@ -223,14 +258,22 @@ def detect_range(
         on=["unique_id", "ds"],
         how="inner",
     )
-    if points.empty:
-        return pd.DataFrame(columns=ANOMALY_COLUMNS), 0
-    scored = score_points(points, detector, catalogue, cfg)
-    frames = [detect_day(g, cfg) for _, g in scored.groupby("ds")]
-    frames = [f for f in frames if not f.empty]
-    anomalies = (
-        pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=ANOMALY_COLUMNS)
-    )
-    return anomalies.sort_values(["date", "kpi", "granularity"]).reset_index(drop=True), int(
-        scored["eligible"].sum()
-    )
+    tests = 0
+    anomalies = pd.DataFrame(columns=ANOMALY_COLUMNS)
+    if not points.empty:
+        scored = score_points(points, detector, catalogue, cfg)
+        frames = [detect_day(g, cfg) for _, g in scored.groupby("ds")]
+        frames = [f for f in frames if not f.empty]
+        if frames:
+            anomalies = pd.concat(frames, ignore_index=True)
+        tests = int(scored["eligible"].sum())
+    elif not guard_alerts:
+        return anomalies, 0
+    if guard_alerts:
+        guard_frame = pd.DataFrame(guard_alerts, columns=ANOMALY_COLUMNS)
+        anomalies = (
+            guard_frame
+            if anomalies.empty
+            else pd.concat([anomalies, guard_frame], ignore_index=True)
+        )
+    return anomalies.sort_values(["date", "kpi", "granularity"]).reset_index(drop=True), tests

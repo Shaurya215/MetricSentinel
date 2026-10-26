@@ -15,13 +15,12 @@ from pydantic import ValidationError
 from core.settings import REPO_ROOT
 from ds.calendar import black_friday, calendar_windows, carnival_tuesday, window_on
 from ds.catalogue import ImprovementFlags, load_detection_config
+from ds.feed_guard import collapse_days, last_reliable_day
 from evaluation.breakdown import (
     ClassifyContext,
     breakdown,
     classify,
-    collapse_days,
     fraction,
-    last_reliable_day,
     load_known_events,
     matching_events,
     wilson,
@@ -336,10 +335,11 @@ def test_faults_not_aimed_at_a_monitored_dimension_target_the_total() -> None:
 # ---------------------------------------------------------------------------
 # Flags and development protocol
 # ---------------------------------------------------------------------------
-def test_all_3b_flags_are_off_and_cannot_be_switched_on_yet() -> None:
+def test_all_3b_flags_are_off_and_only_implemented_ones_can_be_switched_on() -> None:
     cfg = load_detection_config()
     assert not any(cfg.improvements.model_dump().values())
-    for flag in ("feed_guard", "log_gmv", "share_test", "calendar_downgrade"):
+    assert ImprovementFlags(feed_guard=True).feed_guard is True  # change A is implemented
+    for flag in ("log_gmv", "share_test", "calendar_downgrade"):  # B, C, D are not (yet)
         with pytest.raises(ValidationError, match="not implemented yet"):
             ImprovementFlags(**{flag: True})
 

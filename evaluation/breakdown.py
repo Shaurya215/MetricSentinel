@@ -4,8 +4,8 @@ changes what the detector alerts on; it only labels alarms after the fact.
 * Known events are compared as plain calendar dates in Brazilian local time. Olist timestamps
   have no timezone and nothing converts one, so there is no UTC shift. A datetime or a
   timezone-aware value is rejected rather than silently shifted.
-* `last_reliable_day` implements the validity rule of ADR section 8, a rule defined after
-  diagnosis of the end-of-data drop.
+* `last_reliable_day` and `collapse_days` live in `ds/feed_guard.py` (change A) and are re-exported
+  here for the reports.
 * `classify` assigns each alarm to exactly one cause, in a fixed priority order.
 """
 
@@ -26,8 +26,6 @@ from core.settings import REPO_ROOT
 from ds.calendar import CalendarWindow, window_on
 
 KNOWN_EVENTS_PATH = REPO_ROOT / "config" / "known_events.yaml"
-COLLAPSE_FRACTION = 0.35  # ADR section 8: below 35% of the trailing norm is a collapse day
-NORM_DAYS = 28
 CAUSES = ("dataset_cutoff", "calendar_window", "known_event", "gmv_spike", "other")
 
 
@@ -66,32 +64,6 @@ def load_known_events(path: Path = KNOWN_EVENTS_PATH) -> list[KnownEvent]:
 
 def matching_events(events: Sequence[KnownEvent], day: date, kpi: str) -> list[str]:
     return [e.id for e in events if e.matches(day, kpi)]
-
-
-# ---------------------------------------------------------------------------
-# Last reliable day
-# ---------------------------------------------------------------------------
-def collapse_days(totals: pd.Series) -> pd.Series:
-    """True for days whose total is below 35% of the median of the previous 28 days."""
-    norm = totals.rolling(NORM_DAYS, min_periods=NORM_DAYS).median().shift(1)
-    return (totals < COLLAPSE_FRACTION * norm).fillna(False)
-
-
-def last_reliable_day(totals: pd.Series) -> date:
-    """The day before the terminal run of collapse days at the end of the data.
-
-    `totals` is total orders per day, indexed by date, with no gaps. If the last day is not a
-    collapse day the data does not end in a collapse and the last day itself is returned.
-    """
-    flags = collapse_days(totals.sort_index())
-    index = [pd.Timestamp(i).date() for i in flags.index]
-    values = flags.to_list()
-    position = len(values)
-    while position > 0 and values[position - 1]:
-        position -= 1
-    if position == len(values):
-        return index[-1]
-    return index[position - 1] if position > 0 else index[0]
 
 
 # ---------------------------------------------------------------------------

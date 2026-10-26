@@ -46,6 +46,7 @@ from ds.catalogue import (
     DetectionConfig,
 )
 from ds.detection import Detector, detect_range, forecast_period
+from ds.feed_guard import GUARD_DIMENSION, is_guard_alert
 from ds.forecasting import load_series
 from pipelines.faults import (
     Scenario,
@@ -159,7 +160,8 @@ def targeted_mask(
             )
         )
         return (own | pooled).to_numpy()
-    return (flags["dimension"] == "total").to_numpy()
+    # A guard alert is a total-level data-quality alert: it is a hit for faults aimed at the total.
+    return flags["dimension"].isin(["total", GUARD_DIMENSION]).to_numpy()
 
 
 def _with_alpha(cfg: DetectionConfig, alpha: float) -> DetectionConfig:
@@ -218,7 +220,9 @@ def _extra_fields(
         ]
         curve[str(alpha)] = sorted(float(x) for x in hits_a["severity"])
 
+    ex_guard = strict[~is_guard_alert(strict)] if len(strict) else strict
     return {
+        "strict_detected_ex_guard": bool(len(ex_guard)),
         "target_share": share,
         "size_band": "total"
         if s.dimension == "data_quality"
@@ -311,6 +315,9 @@ def run_scenario(
         "seconds": round(time.perf_counter() - started, 1),
     }
     if extras is not None:
+        guard_hits = hits[is_guard_alert(hits)] if len(hits) else hits
+        row["detected_ex_guard"] = bool(len(hits) - len(guard_hits))
+        row["guard_alert_hit"] = bool(len(guard_hits))
         row.update(
             _extra_fields(
                 s,

@@ -44,8 +44,10 @@ from ds.catalogue import (
     DetectionConfig,
     load_catalogue,
     load_detection_config,
+    with_flags,
 )
 from ds.detection import Detector, detect_range
+from ds.feed_guard import is_guard_alert, last_reliable_day
 from ds.forecasting import load_series
 from evaluation.breakdown import (
     CAUSES,
@@ -53,7 +55,6 @@ from evaluation.breakdown import (
     breakdown,
     classify,
     fraction,
-    last_reliable_day,
     load_known_events,
 )
 from evaluation.detection import (
@@ -188,15 +189,20 @@ def run_protocol(
     ]
     clean_by_alpha: dict[float, pd.DataFrame] = {}
     clean_tests = 0
+    guard_diag: dict[str, Any] = {}
     for alpha in ALPHAS:
+        diag: dict[str, Any] = {}
         frame, tests = detect_range(
-            series, fc, clean_days, detector, catalogue, _with_alpha(cfg, alpha)
+            series, fc, clean_days, detector, catalogue, _with_alpha(cfg, alpha), diagnostics=diag
         )
         clean_by_alpha[alpha] = frame
         if abs(alpha - cfg.detection.fdr_q) < 1e-12:
             clean_tests = tests
+            guard_diag = diag
     base_alpha = min(ALPHAS, key=lambda a: abs(a - cfg.detection.fdr_q))
     clean_anoms = clean_by_alpha[base_alpha]
+    # Days past the last reliable day are silently suppressed: not clean TESTED days (ADR section 15).
+    tested_clean_days = len(clean_days) - len(guard_diag.get("guard_past_data_end", []))
     log.info(
         "clean_run_done",
         protocol=proto.name,
@@ -242,9 +248,19 @@ def run_protocol(
         )
         rows.append(row)
     results = pd.DataFrame(rows)
-    summary = summarise(results, clean_anoms, len(clean_days), clean_tests)
+    summary = summarise(results, clean_anoms, tested_clean_days, clean_tests)
     summary["extended"] = extended_summary(
-        results, clean_anoms, len(clean_days), clean_by_alpha, ctx, base_alpha
+        results,
+        clean_anoms,
+        tested_clean_days,
+        clean_by_alpha,
+        ctx,
+        base_alpha,
+        guard_info={
+            "enabled": cfg.improvements.feed_guard,
+            "diagnostics": guard_diag,
+            "clean_days_total": len(clean_days),
+        },
     )
     causes = [classify(r.date, r.kpi, r.direction, ctx) for r in clean_anoms.itertuples()]
     from evaluation.tracking import git_sha
@@ -258,6 +274,7 @@ def run_protocol(
         "label": proto.label,
         "period": f"{proto.period.start} to {proto.period.end}",
         "last_reliable_day": str(ctx.last_reliable),
+        "flags": ",".join(n for n, on in cfg.improvements.model_dump().items() if on) or "none",
     }
     return ProtocolResult(
         proto, rows, results, clean_anoms, clean_tests, clean_days, summary, causes, meta
@@ -288,8 +305,16 @@ def extended_summary(
     clean_by_alpha: dict[float, pd.DataFrame],
     ctx: ClassifyContext,
     base_alpha: float,
+    guard_info: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     ge20 = _mask_ge20(results)
+    guard_info = guard_info or {
+        "enabled": False,
+        "diagnostics": {},
+        "clean_days_total": clean_days_n,
+    }
+    diag = guard_info["diagnostics"]
+    guard_clean = clean_anoms[is_guard_alert(clean_anoms)] if len(clean_anoms) else clean_anoms
     per30 = (lambda n: n / clean_days_n * 30) if clean_days_n else (lambda n: float("nan"))
     lenient_ge20, strict_ge20 = (
         _recall(results, "detected", ge20),
@@ -370,7 +395,26 @@ def extended_summary(
             "clean_days": clean_days_n,
             "per_30_days": per30(fa["total"]),
             "alarm_days_per_30_days": per30(fa["alarm_days"]),
-            "guard_alerts": "not enabled (change A not implemented)",
+            "guard_alerts": len(guard_clean),
+            "alerts_excluding_guard": int(fa["total"] - len(guard_clean)),
+        },
+        "guard": {
+            "enabled": bool(guard_info["enabled"]),
+            "clean_alerts": len(guard_clean),
+            "clean_days_fired": [str(d) for d in guard_clean["date"]] if len(guard_clean) else [],
+            "silently_suppressed_days": [str(d) for d in diag.get("guard_past_data_end", [])],
+            "clean_days_total": guard_info["clean_days_total"],
+            "scenarios_hit_by_guard_alert": int(results["guard_alert_hit"].sum())
+            if "guard_alert_hit" in results
+            else 0,
+            "lenient_ex_guard": {
+                "all": _recall(results, "detected_ex_guard"),
+                "ge20": _recall(results, "detected_ex_guard", ge20),
+            },
+            "strict_ex_guard": {
+                "all": _recall(results, "strict_detected_ex_guard"),
+                "ge20": _recall(results, "strict_detected_ex_guard", ge20),
+            },
         },
         "operating_curve": curve,
     }
@@ -391,7 +435,8 @@ def render_protocol(r: ProtocolResult) -> str:
         f"**{r.meta['label']}**",
         "",
         f"git `{r.meta['git_sha']}` · data `{r.meta['data_hash'][:12]}` · detector `{r.meta['detector_version']}` · "
-        f"scenarios `{r.meta['scenarios_hash']}` · period {r.meta['period']} · last reliable day {r.meta['last_reliable_day']}",
+        f"scenarios `{r.meta['scenarios_hash']}` · period {r.meta['period']} · last reliable day {r.meta['last_reliable_day']} · "
+        f"flags: {r.meta['flags']}",
         "",
         "## Headline",
         "",
@@ -407,7 +452,9 @@ def render_protocol(r: ProtocolResult) -> str:
         f"- False alarms on clean days: **{fa['per_30_days']:.2f} per 30 days** ({fa['total']} alarms on {fa['alarm_days']} "
         f"alarm-days in {fa['clean_days']} days; target <= 2: {'met' if nfr['false_alarms_met'] else 'NOT met'}).",
         f"- Precision of fault-caused alerts: {r.summary['precision_fault_caused'] if r.summary['precision_fault_caused'] is None else format(r.summary['precision_fault_caused'], '.1%')}",
-        f"- Guard alerts: {fa['guard_alerts']}",
+        f"- Guard alerts on clean days: {fa['guard_alerts']} (included in the figure above; "
+        f"{fa['alerts_excluding_guard']} alerts without them)",
+        f"- Alarm-days per 30 days: {fa['alarm_days_per_30_days']:.2f}",
         "",
         "## False alarms by cause",
         "",
@@ -427,6 +474,30 @@ def render_protocol(r: ProtocolResult) -> str:
         lines.append(
             f"| {b} | {_fmt(v['lenient_all'])} | {_fmt(v['strict_all'])} | {_fmt(v['lenient_ge20'])} | {_fmt(v['strict_ge20'])} |"
         )
+    g = x["guard"]
+    lines += ["", "## Guard (change A)", ""]
+    if g["enabled"]:
+        fired = ", ".join(g["clean_days_fired"]) or "none"
+        suppressed = g["silently_suppressed_days"]
+        lines += [
+            f"- Guard alerts on clean days: **{g['clean_alerts']}** on: {fired}. Each counts as a false alarm.",
+            f"- Days silently suppressed (past the last reliable day): {len(suppressed)}"
+            + (
+                f" ({suppressed[0]} to {suppressed[-1]}); not counted as clean tested days."
+                if suppressed
+                else "."
+            ),
+            f"- Scenarios where a guard alert was part of the detection: {g['scenarios_hit_by_guard_alert']}",
+            "",
+            "| recall | with guard alerts | without guard alerts |",
+            "|---|---|---|",
+            f"| lenient, >= 20% | {_fmt(x['lenient']['ge20'])} | {_fmt(g['lenient_ex_guard']['ge20'])} |",
+            f"| lenient, all | {_fmt(x['lenient']['all'])} | {_fmt(g['lenient_ex_guard']['all'])} |",
+            f"| strict, >= 20% | {_fmt(x['strict']['ge20'])} | {_fmt(g['strict_ex_guard']['ge20'])} |",
+            f"| strict, all | {_fmt(x['strict']['all'])} | {_fmt(g['strict_ex_guard']['all'])} |",
+        ]
+    else:
+        lines.append("Not enabled for this run.")
     lines += [
         "",
         "## Recall by measured magnitude",
@@ -525,7 +596,15 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--detector", type=Path, help="detector json (default: the protocol's)")
     parser.add_argument("--scenarios", type=Path, help="scenario yaml (default: the protocol's)")
     parser.add_argument("--name", help="output name under data/reports (default: the protocol's)")
+    parser.add_argument(
+        "--flags",
+        default="",
+        help="comma-separated 3b flags to switch on (feed_guard, log_gmv, share_test, calendar_downgrade)",
+    )
     args = parser.parse_args(argv)
+    flag_names = [f for f in args.flags.split(",") if f]
+    if flag_names:
+        cfg = with_flags(cfg, flag_names)
     proto = available[args.protocol]
     detector_path = args.detector or proto.detector_path
     scenarios_path = args.scenarios or proto.scenarios_path
@@ -563,6 +642,7 @@ def main(argv: list[str] | None = None) -> None:
                 "protocol": proto.name,
                 "label": proto.label,
                 "detector_file": detector_path.name,
+                "flags": ",".join(flag_names) or "none",
             },
         ):
             mlflow.log_params(

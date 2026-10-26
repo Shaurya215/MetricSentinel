@@ -47,6 +47,16 @@ improvements:
   share_test: false # C
   calendar_downgrade: false # D
 
+# Change A parameters (ADR-phase3b section 8). Fixed in advance and NOT to be tuned.
+#   collapse_fraction: a day is a collapse day below this share of the median of the previous norm_days
+#   data_end: the last reliable day, computed by the rule (the day before the terminal run of collapse
+#             days at the end of the data). A validity rule defined AFTER diagnosis. Checked by
+#             `python -m ds.feed_guard --check`. Only used when improvements.feed_guard is on.
+feed_guard:
+  collapse_fraction: 0.35
+  norm_days: 28
+  data_end: 2018-08-24
+
 # Phase 3b development protocol: 2017 only (2018 is already contaminated by diagnosis).
 # Fit period: model choice and calibration. Test period: the 2017 benchmark and clean days.
 development:

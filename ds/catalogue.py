@@ -112,6 +112,18 @@ class DetectionRule(_Strict):
     fdr_q: float = Field(gt=0, lt=1)
 
 
+IMPLEMENTED_FLAGS = frozenset({"feed_guard"})  # extended as each 3b change is written
+
+
+class FeedGuardConfig(_Strict):
+    """Parameters of change A (ADR-phase3b section 8). Fixed in advance; not to be tuned."""
+
+    collapse_fraction: float = Field(default=0.35, gt=0, lt=1)
+    norm_days: int = Field(default=28, ge=7)
+    # Last reliable day: computed by the rule in ds/feed_guard.py, checked by `--check`.
+    data_end: date | None = None
+
+
 class ImprovementFlags(_Strict):
     """Phase 3b switches (docs/decisions/ADR-phase3b.md). All off reproduces Phase 3 exactly.
 
@@ -126,9 +138,13 @@ class ImprovementFlags(_Strict):
 
     @model_validator(mode="after")
     def _only_implemented(self) -> ImprovementFlags:
-        enabled = [name for name in type(self).model_fields if getattr(self, name)]
-        if enabled:
-            raise ValueError(f"not implemented yet: {', '.join(enabled)}")
+        pending = [
+            name
+            for name in type(self).model_fields
+            if getattr(self, name) and name not in IMPLEMENTED_FLAGS
+        ]
+        if pending:
+            raise ValueError(f"not implemented yet: {', '.join(pending)}")
         return self
 
 
@@ -150,6 +166,7 @@ class DetectionConfig(_Strict):
     detection: DetectionRule
     events: list[Event] = []
     improvements: ImprovementFlags = Field(default_factory=ImprovementFlags)
+    feed_guard: FeedGuardConfig = Field(default_factory=FeedGuardConfig)
     development: DevelopmentProtocol | None = None
 
     @model_validator(mode="after")
@@ -183,3 +200,11 @@ def load_catalogue(path: Path = CATALOGUE_PATH) -> Catalogue:
 @lru_cache
 def load_detection_config(path: Path = DETECTION_PATH) -> DetectionConfig:
     return DetectionConfig.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
+
+
+def with_flags(cfg: DetectionConfig, names: list[str] | tuple[str, ...]) -> DetectionConfig:
+    """A copy of the configuration with the named 3b flags switched on."""
+    unknown = set(names) - set(ImprovementFlags.model_fields)
+    if unknown:
+        raise ValueError(f"unknown flag(s): {sorted(unknown)}")
+    return cfg.model_copy(update={"improvements": ImprovementFlags(**dict.fromkeys(names, True))})
