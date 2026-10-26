@@ -1,7 +1,7 @@
 # Roadmap — MetricSentinel
 
-> Current phase: **Phase 3 — Metric Store, Forecasting & Anomaly Detection** (not started; waiting for the owner).
-> Phases 0, 1 and 2 are complete. Phase 2 was verified on the real Olist data (see `docs/DATA_PLAN.md` section 14).
+> Current phase: **Phase 3 — Metric Store, Forecasting & Anomaly Detection** (delivered; NFR-021 not met, gap analysed; owner decision pending on an improvement round).
+> Phases 0, 1 and 2 are complete.
 > Durations are part-time estimates, not commitments.
 
 ## Overview
@@ -118,9 +118,11 @@ flowchart LR
 
 ---
 
-## Phase 3 — Metric Store, Forecasting & Anomaly Detection *(next)*
+## Phase 3 — Metric Store, Forecasting & Anomaly Detection *(delivered)*
 
-**Input from Phase 2 to settle first:** the real EDA shows most state and category segments are too small for daily monitoring under the 30-sample rule, and Black Friday 2017 is 6.4x a normal day. See `docs/DATA_PLAN.md` section 14.
+**Status (2026-10-23):** all tasks delivered; the acceptance criteria are met by the 'gap analysed and documented' route, because NFR-021 is not met (recall 56.2% at >= 20% magnitude, 9.26 false alarms per 30 days). Results and gap analysis: `docs/AI_ML_PLAN.md` section 2.5.
+
+**Input from Phase 2 (settled):** the real EDA shows most state and category segments are too small for daily monitoring under the 30-sample rule, and Black Friday 2017 is 6.4x a normal day. See `docs/DATA_PLAN.md` section 14.
 
 **Objective:** Detect real KPI anomalies with controlled false alarms, and prove it on labelled faults.
 
@@ -383,3 +385,9 @@ MetricSentinel/
 | 2026-10-22 | Phase 2 run on the real Olist data and closed: all hard checks pass, rebuilds identical, EDA findings recorded in DATA_PLAN section 14, `checksums.json` committed | Phase 2 Definition of Done |
 | 2026-10-22 | Soft-check thresholds and the monitoring window in `pipelines/config.py` changed from provisional guesses to values set from the real data | EDA task |
 | 2026-10-22 | Open decision for Phase 3 recorded: how to monitor segments too small for the 30-per-day sample rule | EDA finding |
+| 2026-10-23 | Phase 3 delivered: metric catalogue, metric store, simulated clock, fault injector + 30-scenario benchmark, backtest, detector, detection evaluation | Phase 3 tasks |
+| 2026-10-23 | Small-segment decision implemented: daily / weekly / pooled `__other__`, decided on clean data | Open decision from Phase 2 (owner said "start Phase 3"; the recommended option was used) |
+| 2026-10-23 | `ds` dependency group installed by default (CI and `make setup` need statsforecast and MLflow) | Phase 3 code is tested in CI |
+| 2026-10-23 | Volume KPIs (`orders`, `gmv`) alert in both directions | A pipeline bug that duplicates rows is a spike, although the business "bad" direction is down |
+| 2026-10-23 | Bug fixed after the first evaluation: zero-count days were never tested for count/sum KPIs | Scenario S28 (all orders dropped for a day) was missed |
+| 2026-10-23 | NFR-021 not met; detector NOT re-tuned on the 2018 evaluation data | Tuning on the scored data would make the numbers meaningless; fixes are listed in AI_ML_PLAN 2.5 and need a fresh benchmark |

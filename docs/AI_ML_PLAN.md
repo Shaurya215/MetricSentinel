@@ -51,6 +51,81 @@ Holiday indicators come from `dim_date`. Series with low volume are aggregated o
 
 On the fault benchmark plus clean days: precision, recall (overall and by magnitude band), detection delay in days, and false alarms per 30 simulated days. Initial target: NFR-021.
 
+### 2.5 Phase 3 results (2026-10-23) and gap analysis
+
+All numbers come from the harness (`make backtest`, `make eval-detection`) and are logged to MLflow.
+Run: git `11147b0`, data_hash `8333919867b2`, detector `16cecd334dd9`, scenarios `3fedd09cae9d`.
+
+**Backtest (2017 only; model choice and calibration never saw 2018).**
+
+| Series group | Chosen model | Calibration | MASE | Calibrated coverage (2nd half) |
+|---|---|---|---|---|
+| volume daily | AutoETS | x1.02 | 1.05 | 92.7% |
+| volume weekly | AutoTheta | x1.66 | 1.35 | 91.3% |
+| ratio daily | AutoTheta | x0.96 | 0.59 | 93.1% |
+| ratio weekly | AutoETS | x1.21 | 1.58 | 97.3% |
+| rate daily | AutoTheta | x1.40 | 1.82 | 89.4% (below the 90% floor) |
+| rate weekly | AutoTheta | x1.88 | 3.17 | 91.6% |
+| mean daily | SeasonalNaive | x1.07 | 1.18 | 90.9% |
+| mean weekly | AutoETS | x1.38 | 2.22 | 90.8% |
+
+AutoARIMA (run on the total series only, about 1.3 s per fit) did not beat AutoETS or AutoTheta on any total series.
+Full tables: `data/reports/backtest.md`.
+
+**Detection on the 30-scenario benchmark plus 243 clean days of 2018.**
+
+| Metric | Result | NFR-021 target |
+|---|---|---|
+| Recall, all 30 scenarios | 36.7% | - |
+| Recall, faults with measured magnitude >= 20% (16) | **56.2%** | >= 80%: **not met** |
+| False alarms on clean days | **9.26 per 30 days** (75 in 243 days) | <= 2: **not met** |
+| Precision of fault-caused anomalies | 79.4% | - |
+| Detection delay | median 5.0 days, mean 5.3 days | - |
+| One day's detection, all 214 series (NFR-004) | 6.4 s | < 60 s: met |
+
+Recall by fault type: pipeline_bug 80%, category_price_change 40%, payment_failure 40%, and 20% each for
+segment_level_shift, seller_delay and review_collapse. By target size: large 55%, medium 12%, small 0%.
+
+**History of this number.** The first evaluation run found a bug: count/sum KPIs were skipped when the
+day's count was below the minimum sample, so a day with ZERO orders was never tested (scenario S28,
+all orders dropped for a day, went undetected). After the fix (regression tests added) recall at >= 20%
+went from 43.8% to 56.2%, and clean-day alarms rose from 4.57 to 9.26 per 30 days, because zero-count
+days are now tested (see the cut-off finding below). Both runs are in MLflow.
+
+**Gap analysis: why false alarms are high (75 clean-day alarms).**
+
+| Cause | Alarms | Evidence |
+|---|---|---|
+| The dataset stops: orders fall to 14, 4 and 1 on 29-31 August 2018 | 13 | Daily counts; the Phase 2 window rule used a trailing 7-day mean, which lags, so it let these days in |
+| Post-holiday surge, 1-14 January 2018 | 17 | Orders 2x the forecast after a December holiday lull that was not marked as an event |
+| Truckers' strike window, 21 May - 4 June 2018 (delivery and review KPIs) | 5 | A documented national strike; these are probably real incidents, not false alarms |
+| Other upward volume spikes, mostly daily GMV | 24 | GMV is heavy-tailed (a few expensive orders); the normal-error interval is too thin on the upper side |
+| Other | 16 | Mixed: review-score dips, freight-ratio jumps, weekly segment swings |
+
+Even excluding the dataset cut-off, the rate is 7.9 per 30 days, so the target is genuinely missed.
+
+**Gap analysis: why recall is low.**
+
+* Small segments are pooled into `__other__`, so a 50% drop in a small state (S03, PA) is diluted to a few
+  percent of the pool. This is the cost of the Phase 2 sample-size finding.
+* Weekly series react only at the week end and have wide intervals (volume weekly calibration x1.66), so
+  medium segments are caught only when the fault is large and covers whole weeks.
+* Seller delay targets the seller's state, which is not a monitored dimension; only the diluted effect on
+  the total is visible (measured change 0-9%).
+* Daily order volume is volatile (the calibrated interval is roughly +/-40% of the forecast), so duplicating
+  30% of one day's orders (S29) stays inside it. Larger one-day bugs (S26, S27, S28, S30) are caught on the day.
+
+**What would close the gap (proposed, not done).** To avoid tuning on the scored data, any of these must be
+validated on a NEW benchmark (new seed and dates) before its numbers are reported.
+
+1. Composition tests for segments: test each segment's *share* of the total (binomial), not its level. Shares
+   are far less noisy than levels and expose payment, state and category faults inside the total.
+2. Heavy-tailed volume: model GMV on a log scale, or keep GMV's alert direction to `down` and leave spikes to `orders`.
+3. Calendar events known in advance: Christmas-New Year holiday season, and a data-completeness guard that stops
+   testing when the feed collapses (and raises a single data-quality alert instead).
+4. Add `seller_state` as a dimension for the delivery KPIs.
+5. Correct the Phase 2 window rule to use a centred rolling mean (the trailing mean lags at the end of the data).
+
 ## 3. Root-cause statistics (agent tools) `[MVP]`
 
 | Tool | Method | Output |

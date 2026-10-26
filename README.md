@@ -2,10 +2,10 @@
 
 **Autonomous KPI anomaly detection and root-cause investigation, with grounded reports and human approval.**
 
-> **Status: Phase 2 — Data ingestion, validation & EDA (complete).**
-> The data pipeline has been run on the real Olist dataset: all hard checks pass and rebuilds are identical.
-> The data-quality and EDA findings are in `docs/DATA_PLAN.md` section 14. Anomaly detection, the agent and the
-> rest are still *planned*; nothing about them is implemented yet.
+> **Status: Phase 3 — Metric store, forecasting & anomaly detection (delivered; quality target not yet met).**
+> Detection runs end to end on the real Olist data and is measured on a 30-fault benchmark. It does **not**
+> yet meet its initial target (NFR-021); the gap is analysed in `docs/AI_ML_PLAN.md` section 2.5.
+> The investigation agent, verifier, API and UI are still *planned*.
 
 ---
 
@@ -192,7 +192,18 @@ Reasons and alternatives: [`docs/TECH_STACK.md`](docs/TECH_STACK.md). The projec
 
 ## 8. Results
 
-**None yet.** This section will contain only numbers produced by the evaluation harness, with the commit, dataset version and model version that produced them.
+Only numbers produced by the evaluation harness (NFR-025). Run: git `11147b0`, data_hash `8333919867b2`,
+detector `16cecd334dd9`, scenarios `3fedd09cae9d`; logged in MLflow (`make eval-detection`).
+
+| Detection (Phase 3) | Result | Initial target (NFR-021) |
+|---|---|---|
+| Recall on injected faults with magnitude >= 20% | 56.2% (9 of 16) | >= 80% (not met) |
+| False alarms on clean days | 9.26 per 30 days | <= 2 (not met) |
+| Precision of fault-caused alerts | 79.4% | - |
+| Median detection delay | 5 days | - |
+| One day's detection over 214 series | 6.4 s | < 60 s (met) |
+
+Why the target is missed, and what would fix it: `docs/AI_ML_PLAN.md` section 2.5.
 
 ## 9. Long-term vision
 

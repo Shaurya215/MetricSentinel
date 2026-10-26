@@ -301,3 +301,17 @@ unknown-category soft limit 2.5% (observed 1.44%), and the "no gaps" check now u
 
 1. The notebook `notebooks/01_eda.ipynb` has no stored outputs (no Jupyter dependency was added). All numbers above come from `pipelines/eda.py`; run `make eda` to regenerate `data/reports/eda_findings.md`.
 2. Open design decision for Phase 3: how to monitor small segments (see the minimum-sample finding).
+
+### Phase 3 additions (2026-10-23)
+
+* **Small segments (open decision from Phase 2, now implemented).** `metrics.series_plan` classifies every
+  KPI x segment on clean data: daily if at least 80% of days meet the KPI's minimum sample, else weekly if at
+  least 80% of weeks do, else pooled into one `__other__` series per dimension. Result: 32 daily and 182 weekly
+  series are monitored. The volume KPIs use a minimum sample of 10 (the plan had none), so MG, RJ, boleto and
+  tier T3 also qualify daily for `orders` and `gmv`.
+* **One dimension value per order.** Category and seller tier are taken from the order's most expensive item,
+  so segments add up exactly to the total (a hard check in `make data`).
+* **Simulated clock limitation.** `sim.*` views hide future deliveries, approvals and reviews, but the order
+  status is the final snapshot: a cancellation after the simulated date cannot be undone.
+* **Data cut-off.** The data ends abruptly (orders fall to 1-14 a day on 29-31 August 2018). The Phase 2 window
+  rule (trailing 7-day mean) did not exclude these days; see AI_ML_PLAN.md section 2.5.
