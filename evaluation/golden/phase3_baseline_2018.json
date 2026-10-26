@@ -1,0 +1,1010 @@
+{
+ "what": "Phase 3 baseline, 2018 evaluation period, real Olist data. Frozen from the run on commit 11147b0 (tag phase-3-baseline = 5c385bc, which holds the same detector code). 'Exact' means: every discrete value below must match; floats are compared to a relative 1e-9 because DuckDB's multi-threaded float sums differ in the last digit between runs.",
+ "meta": {
+  "git_sha": "11147b022a80d5b5ecd3b72f14dcc00ab3a0dccc",
+  "data_hash": "8333919867b274ec53c336cbb842f749e97e3631a3c4ffc88a9cb5c7174db1fe",
+  "detector_version": "16cecd334dd9",
+  "scenarios_hash": "3fedd09cae9d"
+ },
+ "summary": {
+  "scenarios": 30,
+  "recall": 0.36666666666666664,
+  "recall_magnitude_ge_20pct": 0.5625,
+  "scenarios_magnitude_ge_20pct": 16,
+  "median_delay_days": 5.0,
+  "mean_delay_days": 5.2727272727272725,
+  "precision_fault_caused": 0.7936507936507936,
+  "clean_days": 243,
+  "clean_tests": 13732,
+  "clean_anomalies": 75,
+  "false_alarms_per_30_days": 9.25925925925926
+ },
+ "scenarios": [
+  {
+   "id": "S01-segment_level_shift",
+   "fault_type": "segment_level_shift",
+   "dimension": "customer_state",
+   "value": "MG",
+   "measured_magnitude": 0.0741,
+   "detected": false,
+   "delay_days": null,
+   "true_positive_anomalies": 0,
+   "caused_anomalies": 0,
+   "changed_series": 112,
+   "tests": 1174,
+   "detected_by": []
+  },
+  {
+   "id": "S02-segment_level_shift",
+   "fault_type": "segment_level_shift",
+   "dimension": "category_en",
+   "value": "telephony",
+   "measured_magnitude": 0.1575,
+   "detected": false,
+   "delay_days": null,
+   "true_positive_anomalies": 0,
+   "caused_anomalies": 0,
+   "changed_series": 122,
+   "tests": 1614,
+   "detected_by": []
+  },
+  {
+   "id": "S03-segment_level_shift",
+   "fault_type": "segment_level_shift",
+   "dimension": "customer_state",
+   "value": "PA",
+   "measured_magnitude": 0.5,
+   "detected": false,
+   "delay_days": null,
+   "true_positive_anomalies": 0,
+   "caused_anomalies": 0,
+   "changed_series": 54,
+   "tests": 1172,
+   "detected_by": []
+  },
+  {
+   "id": "S04-segment_level_shift",
+   "fault_type": "segment_level_shift",
+   "dimension": "category_en",
+   "value": "telephony",
+   "measured_magnitude": 0.4645,
+   "detected": false,
+   "delay_days": null,
+   "true_positive_anomalies": 0,
+   "caused_anomalies": 1,
+   "changed_series": 138,
+   "tests": 1998,
+   "detected_by": []
+  },
+  {
+   "id": "S05-segment_level_shift",
+   "fault_type": "segment_level_shift",
+   "dimension": "customer_state",
+   "value": "SP",
+   "measured_magnitude": 0.6796,
+   "detected": true,
+   "delay_days": 11,
+   "true_positive_anomalies": 3,
+   "caused_anomalies": 9,
+   "changed_series": 160,
+   "tests": 1966,
+   "detected_by": [
+    "gmv:daily:customer_state=SP",
+    "orders:daily:category_en=__other__",
+    "orders:daily:customer_state=SP"
+   ]
+  },
+  {
+   "id": "S06-seller_delay",
+   "fault_type": "seller_delay",
+   "dimension": "seller_state",
+   "value": "SP",
+   "measured_magnitude": 0.0892,
+   "detected": false,
+   "delay_days": null,
+   "true_positive_anomalies": 0,
+   "caused_anomalies": 0,
+   "changed_series": 42,
+   "tests": 1668,
+   "detected_by": []
+  },
+  {
+   "id": "S07-seller_delay",
+   "fault_type": "seller_delay",
+   "dimension": "seller_state",
+   "value": "RJ",
+   "measured_magnitude": 0.0055,
+   "detected": false,
+   "delay_days": null,
+   "true_positive_anomalies": 0,
+   "caused_anomalies": 0,
+   "changed_series": 41,
+   "tests": 1924,
+   "detected_by": []
+  },
+  {
+   "id": "S08-seller_delay",
+   "fault_type": "seller_delay",
+   "dimension": "seller_state",
+   "value": "CE",
+   "measured_magnitude": 0.0003,
+   "detected": false,
+   "delay_days": null,
+   "true_positive_anomalies": 0,
+   "caused_anomalies": 0,
+   "changed_series": 10,
+   "tests": 1206,
+   "detected_by": []
+  },
+  {
+   "id": "S09-seller_delay",
+   "fault_type": "seller_delay",
+   "dimension": "seller_state",
+   "value": "PE",
+   "measured_magnitude": 0.003,
+   "detected": false,
+   "delay_days": null,
+   "true_positive_anomalies": 0,
+   "caused_anomalies": 0,
+   "changed_series": 28,
+   "tests": 2040,
+   "detected_by": []
+  },
+  {
+   "id": "S10-seller_delay",
+   "fault_type": "seller_delay",
+   "dimension": "seller_state",
+   "value": "MG",
+   "measured_magnitude": 0.029,
+   "detected": true,
+   "delay_days": 5,
+   "true_positive_anomalies": 2,
+   "caused_anomalies": 2,
+   "changed_series": 42,
+   "tests": 2454,
+   "detected_by": [
+    "late_delivery_rate:daily:total=all"
+   ]
+  },
+  {
+   "id": "S11-payment_failure",
+   "fault_type": "payment_failure",
+   "dimension": "payment_type",
+   "value": "credit_card",
+   "measured_magnitude": 0.1082,
+   "detected": true,
+   "delay_days": 21,
+   "true_positive_anomalies": 1,
+   "caused_anomalies": 4,
+   "changed_series": 198,
+   "tests": 1962,
+   "detected_by": [
+    "orders:daily:customer_state=SP"
+   ]
+  },
+  {
+   "id": "S12-payment_failure",
+   "fault_type": "payment_failure",
+   "dimension": "payment_type",
+   "value": "boleto",
+   "measured_magnitude": 0.155,
+   "detected": false,
+   "delay_days": null,
+   "true_positive_anomalies": 0,
+   "caused_anomalies": 0,
+   "changed_series": 196,
+   "tests": 2002,
+   "detected_by": []
+  },
+  {
+   "id": "S13-payment_failure",
+   "fault_type": "payment_failure",
+   "dimension": "payment_type",
+   "value": "voucher",
+   "measured_magnitude": 0.3592,
+   "detected": false,
+   "delay_days": null,
+   "true_positive_anomalies": 0,
+   "caused_anomalies": 0,
+   "changed_series": 184,
+   "tests": 1402,
+   "detected_by": []
+  },
+  {
+   "id": "S14-payment_failure",
+   "fault_type": "payment_failure",
+   "dimension": "payment_type",
+   "value": "debit_card",
+   "measured_magnitude": 0.5,
+   "detected": false,
+   "delay_days": null,
+   "true_positive_anomalies": 0,
+   "caused_anomalies": 0,
+   "changed_series": 172,
+   "tests": 1608,
+   "detected_by": []
+  },
+  {
+   "id": "S15-payment_failure",
+   "fault_type": "payment_failure",
+   "dimension": "payment_type",
+   "value": "credit_card",
+   "measured_magnitude": 0.6846,
+   "detected": true,
+   "delay_days": 0,
+   "true_positive_anomalies": 26,
+   "caused_anomalies": 27,
+   "changed_series": 198,
+   "tests": 1592,
+   "detected_by": [
+    "gmv:daily:seller_tier=T4",
+    "gmv:daily:total=all",
+    "gmv:weekly:category_en=stationery",
+    "orders:daily:category_en=__other__",
+    "orders:daily:total=all",
+    "orders:weekly:category_en=computers_accessories"
+   ]
+  },
+  {
+   "id": "S16-category_price_change",
+   "fault_type": "category_price_change",
+   "dimension": "category_en",
+   "value": "health_beauty",
+   "measured_magnitude": 0.0985,
+   "detected": false,
+   "delay_days": null,
+   "true_positive_anomalies": 0,
+   "caused_anomalies": 0,
+   "changed_series": 73,
+   "tests": 1998,
+   "detected_by": []
+  },
+  {
+   "id": "S17-category_price_change",
+   "fault_type": "category_price_change",
+   "dimension": "category_en",
+   "value": "housewares",
+   "measured_magnitude": 0.1988,
+   "detected": false,
+   "delay_days": null,
+   "true_positive_anomalies": 0,
+   "caused_anomalies": 0,
+   "changed_series": 58,
+   "tests": 1620,
+   "detected_by": []
+  },
+  {
+   "id": "S18-category_price_change",
+   "fault_type": "category_price_change",
+   "dimension": "category_en",
+   "value": "toys",
+   "measured_magnitude": 0.3,
+   "detected": false,
+   "delay_days": null,
+   "true_positive_anomalies": 0,
+   "caused_anomalies": 0,
+   "changed_series": 50,
+   "tests": 1606,
+   "detected_by": []
+  },
+  {
+   "id": "S19-category_price_change",
+   "fault_type": "category_price_change",
+   "dimension": "category_en",
+   "value": "sports_leisure",
+   "measured_magnitude": 0.4988,
+   "detected": true,
+   "delay_days": 10,
+   "true_positive_anomalies": 1,
+   "caused_anomalies": 1,
+   "changed_series": 54,
+   "tests": 1606,
+   "detected_by": [
+    "freight_ratio:weekly:category_en=sports_leisure"
+   ]
+  },
+  {
+   "id": "S20-category_price_change",
+   "fault_type": "category_price_change",
+   "dimension": "category_en",
+   "value": "bed_bath_table",
+   "measured_magnitude": 0.6995,
+   "detected": true,
+   "delay_days": 5,
+   "true_positive_anomalies": 5,
+   "caused_anomalies": 5,
+   "changed_series": 59,
+   "tests": 1606,
+   "detected_by": [
+    "aov:weekly:category_en=bed_bath_table",
+    "freight_ratio:daily:customer_state=SP",
+    "freight_ratio:daily:seller_tier=T4",
+    "freight_ratio:weekly:category_en=bed_bath_table"
+   ]
+  },
+  {
+   "id": "S21-review_collapse",
+   "fault_type": "review_collapse",
+   "dimension": "category_en",
+   "value": "bed_bath_table",
+   "measured_magnitude": 0.0868,
+   "detected": false,
+   "delay_days": null,
+   "true_positive_anomalies": 0,
+   "caused_anomalies": 0,
+   "changed_series": 24,
+   "tests": 1170,
+   "detected_by": []
+  },
+  {
+   "id": "S22-review_collapse",
+   "fault_type": "review_collapse",
+   "dimension": "category_en",
+   "value": "auto",
+   "measured_magnitude": 0.1659,
+   "detected": false,
+   "delay_days": null,
+   "true_positive_anomalies": 0,
+   "caused_anomalies": 0,
+   "changed_series": 30,
+   "tests": 1206,
+   "detected_by": []
+  },
+  {
+   "id": "S23-review_collapse",
+   "fault_type": "review_collapse",
+   "dimension": "category_en",
+   "value": "garden_tools",
+   "measured_magnitude": 0.1772,
+   "detected": false,
+   "delay_days": null,
+   "true_positive_anomalies": 0,
+   "caused_anomalies": 0,
+   "changed_series": 30,
+   "tests": 1948,
+   "detected_by": []
+  },
+  {
+   "id": "S24-review_collapse",
+   "fault_type": "review_collapse",
+   "dimension": "category_en",
+   "value": "electronics",
+   "measured_magnitude": 0.3694,
+   "detected": false,
+   "delay_days": null,
+   "true_positive_anomalies": 0,
+   "caused_anomalies": 0,
+   "changed_series": 30,
+   "tests": 1966,
+   "detected_by": []
+  },
+  {
+   "id": "S25-review_collapse",
+   "fault_type": "review_collapse",
+   "dimension": "category_en",
+   "value": "bed_bath_table",
+   "measured_magnitude": 0.4787,
+   "detected": true,
+   "delay_days": 6,
+   "true_positive_anomalies": 2,
+   "caused_anomalies": 4,
+   "changed_series": 32,
+   "tests": 2020,
+   "detected_by": [
+    "avg_review_score:weekly:category_en=bed_bath_table",
+    "low_review_rate:weekly:category_en=bed_bath_table"
+   ]
+  },
+  {
+   "id": "S26-pipeline_bug",
+   "fault_type": "pipeline_bug",
+   "dimension": "data_quality",
+   "value": "fct_orders",
+   "measured_magnitude": 1.0,
+   "detected": true,
+   "delay_days": 0,
+   "true_positive_anomalies": 3,
+   "caused_anomalies": 3,
+   "changed_series": 212,
+   "tests": 794,
+   "detected_by": [
+    "gmv:daily:total=all",
+    "orders:daily:customer_state=SP",
+    "orders:daily:total=all"
+   ]
+  },
+  {
+   "id": "S27-pipeline_bug",
+   "fault_type": "pipeline_bug",
+   "dimension": "data_quality",
+   "value": "fct_orders",
+   "measured_magnitude": 0.5345,
+   "detected": true,
+   "delay_days": 0,
+   "true_positive_anomalies": 1,
+   "caused_anomalies": 1,
+   "changed_series": 212,
+   "tests": 826,
+   "detected_by": [
+    "gmv:daily:total=all"
+   ]
+  },
+  {
+   "id": "S28-pipeline_bug",
+   "fault_type": "pipeline_bug",
+   "dimension": "data_quality",
+   "value": "fct_orders",
+   "measured_magnitude": 1.0,
+   "detected": true,
+   "delay_days": 0,
+   "true_positive_anomalies": 4,
+   "caused_anomalies": 4,
+   "changed_series": 212,
+   "tests": 826,
+   "detected_by": [
+    "gmv:daily:total=all",
+    "orders:daily:customer_state=MG",
+    "orders:daily:customer_state=RJ",
+    "orders:daily:total=all"
+   ]
+  },
+  {
+   "id": "S29-pipeline_bug",
+   "fault_type": "pipeline_bug",
+   "dimension": "data_quality",
+   "value": "fct_orders",
+   "measured_magnitude": 0.3009,
+   "detected": false,
+   "delay_days": null,
+   "true_positive_anomalies": 0,
+   "caused_anomalies": 0,
+   "changed_series": 208,
+   "tests": 832,
+   "detected_by": []
+  },
+  {
+   "id": "S30-pipeline_bug",
+   "fault_type": "pipeline_bug",
+   "dimension": "data_quality",
+   "value": "fct_orders",
+   "measured_magnitude": 0.2864,
+   "detected": true,
+   "delay_days": 0,
+   "true_positive_anomalies": 2,
+   "caused_anomalies": 2,
+   "changed_series": 202,
+   "tests": 840,
+   "detected_by": [
+    "gmv:daily:total=all",
+    "orders:daily:total=all"
+   ]
+  }
+ ],
+ "clean_anomaly_keys": [
+  [
+   "2018-01-02",
+   "avg_delivery_days",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-01-02",
+   "orders",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-01-03",
+   "gmv",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-01-03",
+   "orders",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-01-04",
+   "gmv",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-01-04",
+   "orders",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-01-05",
+   "gmv",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-01-05",
+   "orders",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-01-06",
+   "avg_delivery_days",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-01-06",
+   "gmv",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-01-06",
+   "orders",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-01-07",
+   "gmv",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-01-07",
+   "gmv",
+   "weekly",
+   "category_en",
+   "stationery"
+  ],
+  [
+   "2018-01-07",
+   "late_delivery_rate",
+   "weekly",
+   "customer_state",
+   "RS"
+  ],
+  [
+   "2018-01-07",
+   "orders",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-01-07",
+   "orders",
+   "weekly",
+   "category_en",
+   "stationery"
+  ],
+  [
+   "2018-01-14",
+   "orders",
+   "weekly",
+   "category_en",
+   "computers_accessories"
+  ],
+  [
+   "2018-02-28",
+   "gmv",
+   "daily",
+   "customer_state",
+   "RJ"
+  ],
+  [
+   "2018-03-04",
+   "gmv",
+   "weekly",
+   "category_en",
+   "baby"
+  ],
+  [
+   "2018-03-31",
+   "avg_review_score",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-03-31",
+   "low_review_rate",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-04-08",
+   "avg_review_score",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-04-09",
+   "gmv",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-04-27",
+   "gmv",
+   "daily",
+   "seller_tier",
+   "T3"
+  ],
+  [
+   "2018-04-29",
+   "orders",
+   "weekly",
+   "category_en",
+   "watches_gifts"
+  ],
+  [
+   "2018-05-02",
+   "avg_review_score",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-05-06",
+   "orders",
+   "weekly",
+   "category_en",
+   "watches_gifts"
+  ],
+  [
+   "2018-05-07",
+   "gmv",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-05-07",
+   "orders",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-05-09",
+   "orders",
+   "daily",
+   "customer_state",
+   "RJ"
+  ],
+  [
+   "2018-05-14",
+   "gmv",
+   "daily",
+   "customer_state",
+   "RJ"
+  ],
+  [
+   "2018-05-16",
+   "gmv",
+   "daily",
+   "seller_tier",
+   "T4"
+  ],
+  [
+   "2018-05-20",
+   "gmv",
+   "weekly",
+   "category_en",
+   "electronics"
+  ],
+  [
+   "2018-05-20",
+   "orders",
+   "weekly",
+   "category_en",
+   "watches_gifts"
+  ],
+  [
+   "2018-05-21",
+   "gmv",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-05-23",
+   "gmv",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-05-23",
+   "orders",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-05-26",
+   "avg_delivery_days",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-05-26",
+   "gmv",
+   "daily",
+   "customer_state",
+   "SP"
+  ],
+  [
+   "2018-05-27",
+   "gmv",
+   "daily",
+   "customer_state",
+   "SP"
+  ],
+  [
+   "2018-05-27",
+   "gmv",
+   "weekly",
+   "category_en",
+   "housewares"
+  ],
+  [
+   "2018-05-27",
+   "orders",
+   "weekly",
+   "customer_state",
+   "RS"
+  ],
+  [
+   "2018-05-30",
+   "avg_delivery_days",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-05-31",
+   "gmv",
+   "daily",
+   "customer_state",
+   "RJ"
+  ],
+  [
+   "2018-06-01",
+   "avg_review_score",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-06-01",
+   "low_review_rate",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-06-03",
+   "avg_delivery_days",
+   "weekly",
+   "customer_state",
+   "MG"
+  ],
+  [
+   "2018-06-06",
+   "freight_ratio",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-06-10",
+   "freight_ratio",
+   "weekly",
+   "seller_tier",
+   "T1"
+  ],
+  [
+   "2018-06-11",
+   "gmv",
+   "daily",
+   "payment_type",
+   "credit_card"
+  ],
+  [
+   "2018-06-12",
+   "gmv",
+   "daily",
+   "customer_state",
+   "RJ"
+  ],
+  [
+   "2018-07-02",
+   "freight_ratio",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-07-08",
+   "freight_ratio",
+   "weekly",
+   "seller_tier",
+   "unrated"
+  ],
+  [
+   "2018-07-15",
+   "gmv",
+   "daily",
+   "payment_type",
+   "boleto"
+  ],
+  [
+   "2018-07-15",
+   "gmv",
+   "weekly",
+   "customer_state",
+   "ES"
+  ],
+  [
+   "2018-07-18",
+   "gmv",
+   "daily",
+   "customer_state",
+   "SP"
+  ],
+  [
+   "2018-07-18",
+   "orders",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-07-19",
+   "gmv",
+   "daily",
+   "customer_state",
+   "SP"
+  ],
+  [
+   "2018-07-19",
+   "orders",
+   "daily",
+   "customer_state",
+   "SP"
+  ],
+  [
+   "2018-07-20",
+   "orders",
+   "daily",
+   "customer_state",
+   "SP"
+  ],
+  [
+   "2018-07-26",
+   "gmv",
+   "daily",
+   "seller_tier",
+   "T3"
+  ],
+  [
+   "2018-08-03",
+   "gmv",
+   "daily",
+   "seller_tier",
+   "T3"
+  ],
+  [
+   "2018-08-24",
+   "gmv",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-08-24",
+   "orders",
+   "daily",
+   "customer_state",
+   "RJ"
+  ],
+  [
+   "2018-08-27",
+   "aov",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-08-27",
+   "gmv",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-08-27",
+   "orders",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-08-28",
+   "gmv",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-08-28",
+   "orders",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-08-29",
+   "gmv",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-08-29",
+   "orders",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-08-30",
+   "gmv",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-08-30",
+   "orders",
+   "daily",
+   "total",
+   "all"
+  ],
+  [
+   "2018-08-31",
+   "gmv",
+   "daily",
+   "customer_state",
+   "SP"
+  ],
+  [
+   "2018-08-31",
+   "orders",
+   "daily",
+   "total",
+   "all"
+  ]
+ ]
+}

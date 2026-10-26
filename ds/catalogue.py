@@ -112,6 +112,35 @@ class DetectionRule(_Strict):
     fdr_q: float = Field(gt=0, lt=1)
 
 
+class ImprovementFlags(_Strict):
+    """Phase 3b switches (docs/decisions/ADR-phase3b.md). All off reproduces Phase 3 exactly.
+
+    A flag is rejected until its change is implemented, so a flag can never be switched on
+    silently doing nothing.
+    """
+
+    feed_guard: bool = False  # A: volume-collapse guard and last reliable day
+    log_gmv: bool = False  # B: forecast GMV on a log scale
+    share_test: bool = False  # C: test segments as a share of the parent total
+    calendar_downgrade: bool = False  # D: tag calendar windows, lower severity
+
+    @model_validator(mode="after")
+    def _only_implemented(self) -> ImprovementFlags:
+        enabled = [name for name in type(self).model_fields if getattr(self, name)]
+        if enabled:
+            raise ValueError(f"not implemented yet: {', '.join(enabled)}")
+        return self
+
+
+class DevelopmentProtocol(_Strict):
+    """The 2017-only development protocol (ADR-phase3b section 4)."""
+
+    fit: DateRange
+    test: DateRange
+    benchmark_seed: int
+    first_fault_start: date
+
+
 class DetectionConfig(_Strict):
     monitoring_window: DateRange
     backtest: DateRange
@@ -120,6 +149,8 @@ class DetectionConfig(_Strict):
     forecast: ForecastConfig
     detection: DetectionRule
     events: list[Event] = []
+    improvements: ImprovementFlags = Field(default_factory=ImprovementFlags)
+    development: DevelopmentProtocol | None = None
 
     @model_validator(mode="after")
     def _periods_do_not_overlap(self) -> DetectionConfig:
@@ -129,6 +160,15 @@ class DetectionConfig(_Strict):
         for name, period in (("backtest", self.backtest), ("evaluation", self.evaluation)):
             if period.start < window.start or period.end > window.end:
                 raise ValueError(f"{name} period must lie inside the monitoring window")
+        dev = self.development
+        if dev is not None and not (
+            self.backtest.start <= dev.fit.start
+            and dev.fit.end < dev.test.start
+            and dev.test.end <= self.backtest.end
+        ):
+            raise ValueError(
+                "development fit/test periods must lie inside the 2017 backtest period, fit before test"
+            )
         return self
 
     def event_on(self, day: date) -> Event | None:

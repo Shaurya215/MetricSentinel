@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "created_at": "2026-10-26T07:17:28+00:00",
+  "interval_level": 95,
+  "backtest": {
+    "start": "2017-04-26",
+    "end": "2017-08-27",
+    "split": "2017-06-26"
+  },
+  "selection_rule": "narrowest calibrated interval among models with >= 90% calibrated coverage on the second half",
+  "groups": {
+    "mean|daily": {
+      "model": "AutoETS",
+      "calibration": 1.3425,
+      "met_coverage_floor": true,
+      "mase": 0.996,
+      "calibrated_coverage_second_half": 0.9135
+    },
+    "mean|weekly": {
+      "model": "AutoETS",
+      "calibration": 1.1761,
+      "met_coverage_floor": true,
+      "mase": 1.8677,
+      "calibrated_coverage_second_half": 0.9945
+    },
+    "rate|daily": {
+      "model": "AutoETS",
+      "calibration": 1.0769,
+      "met_coverage_floor": true,
+      "mase": 1.3814,
+      "calibrated_coverage_second_half": 0.9904
+    },
+    "rate|weekly": {
+      "model": "AutoETS",
+      "calibration": 1.488,
+      "met_coverage_floor": true,
+      "mase": 2.5295,
+      "calibrated_coverage_second_half": 0.989
+    },
+    "ratio|daily": {
+      "model": "AutoTheta",
+      "calibration": 0.9145,
+      "met_coverage_floor": true,
+      "mase": 0.5767,
+      "calibrated_coverage_second_half": 0.9761
+    },
+    "ratio|weekly": {
+      "model": "AutoETS",
+      "calibration": 1.3748,
+      "met_coverage_floor": true,
+      "mase": 1.6052,
+      "calibrated_coverage_second_half": 0.9771
+    },
+    "volume|daily": {
+      "model": "AutoTheta",
+      "calibration": 1.1869,
+      "met_coverage_floor": true,
+      "mase": 0.8951,
+      "calibrated_coverage_second_half": 0.9771
+    },
+    "volume|weekly": {
+      "model": "SeasonalNaive",
+      "calibration": 1.1223,
+      "met_coverage_floor": true,
+      "mase": 1.203,
+      "calibrated_coverage_second_half": 0.9427
+    }
+  },
+  "data_hash": "8333919867b274ec53c336cbb842f749e97e3631a3c4ffc88a9cb5c7174db1fe"
+}

@@ -22,6 +22,7 @@ reported in a separate "totals only" comparison; it is not eligible for selectio
 
 from __future__ import annotations
 
+import argparse
 import json
 import time
 from datetime import UTC, datetime
@@ -60,14 +61,14 @@ def group_of(kpi_family: str, granularity: str) -> str:
     return f"{FAMILY_GROUP[kpi_family]}|{granularity}"
 
 
-def candidate_models(series: pd.DataFrame) -> dict[str, list[str]]:
+def candidate_models(series: pd.DataFrame, include_arima: bool = True) -> dict[str, list[str]]:
     models: dict[str, list[str]] = {}
     for uid, granularity, dimension in (
         series[["unique_id", "granularity", "dimension"]].drop_duplicates().itertuples(index=False)
     ):
         if granularity == "weekly":
             models[uid] = list(WEEKLY_CANDIDATES)
-        elif dimension == "total":
+        elif dimension == "total" and include_arima:
             models[uid] = list(DAILY_CANDIDATES)
         else:
             models[uid] = [m for m in DAILY_CANDIDATES if m != "AutoARIMA"]
@@ -181,6 +182,7 @@ def run_backtest(
     *,
     catalogue: Catalogue | None = None,
     cfg: DetectionConfig | None = None,
+    include_arima: bool = True,
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
     catalogue = catalogue or load_catalogue()
     cfg = cfg or load_detection_config()
@@ -197,7 +199,7 @@ def run_backtest(
         if o + pd.Timedelta(days=6).to_pytimedelta() >= cfg.backtest.start
     ]
     started = time.perf_counter()
-    fc = forecast_origins(series, origins, candidate_models(series), spec, cfg)
+    fc = forecast_origins(series, origins, candidate_models(series, include_arima), spec, cfg)
     fc = fc[
         (fc["ds"] >= pd.Timestamp(cfg.backtest.start))
         & (fc["ds"] <= pd.Timestamp(cfg.backtest.end))
@@ -270,32 +272,56 @@ def render(
     )
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    """Default (no arguments): the Phase 3 backtest, exactly as before.
+
+    `--dev NAME` runs the Phase 3b development backtest: model choice and calibration use only
+    the development FIT period (config/detection.yaml `development.fit`), the result is written
+    to config/detector_dev2017_NAME.json (config/detector.json is never touched), and AutoARIMA is
+    skipped because it is report-only and never selectable.
+    """
+    parser = argparse.ArgumentParser(description="Rolling-origin forecast backtest.")
+    parser.add_argument(
+        "--dev", metavar="NAME", help="development backtest on the 2017 fit period only"
+    )
+    args = parser.parse_args(argv)
     configure_logging()
     settings = get_settings()
+    cfg = load_detection_config()
+    detector_path, suffix, include_arima = DETECTOR_PATH, "", True
+    if args.dev:
+        if cfg.development is None:
+            raise SystemExit("config/detection.yaml has no development protocol")
+        cfg = cfg.model_copy(update={"backtest": cfg.development.fit})
+        detector_path = REPO_ROOT / "config" / f"detector_dev2017_{args.dev}.json"
+        suffix, include_arima = f"_dev2017_{args.dev}", False
     with run_context(component="backtest"):
         con = duckdb.connect(str(settings.duckdb_path), read_only=True)
         try:
             from evaluation.tracking import tracked_run, warehouse_data_hash
 
             data_hash = warehouse_data_hash(con)
-            summary, totals, detector = run_backtest(con)
+            summary, totals, detector = run_backtest(con, cfg=cfg, include_arima=include_arima)
         finally:
             con.close()
         detector["data_hash"] = data_hash
-        DETECTOR_PATH.write_text(json.dumps(detector, indent=2) + "\n", encoding="utf-8")
+        detector_path.write_text(json.dumps(detector, indent=2) + "\n", encoding="utf-8")
         report = render(summary, totals, detector, data_hash)
-        out = settings.reports_dir / "backtest.md"
+        out = settings.reports_dir / f"backtest{suffix}.md"
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(report, encoding="utf-8")
-        summary.to_csv(settings.reports_dir / "backtest_summary.csv", index=False)
+        summary.to_csv(settings.reports_dir / f"backtest_summary{suffix}.csv", index=False)
 
         import mlflow
 
         with tracked_run(
             "forecast_backtest",
-            "backtest",
-            {"data_hash": data_hash, "seed": "none (deterministic)"},
+            f"backtest{suffix}" if suffix else "backtest",
+            {
+                "data_hash": data_hash,
+                "seed": "none (deterministic)",
+                "protocol": args.dev or "phase3",
+            },
         ):
             mlflow.log_params(
                 {
@@ -317,7 +343,7 @@ def main() -> None:
                         f"{key}.cal_width": float(r.calibrated_scaled_width_second_half),
                     }
                 )
-            mlflow.log_artifact(str(DETECTOR_PATH))
+            mlflow.log_artifact(str(detector_path))
             mlflow.log_artifact(str(out))
         print(report)
 

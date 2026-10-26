@@ -26,9 +26,11 @@ data hash, detector version and scenario-file hash (FR-086).
 
 from __future__ import annotations
 
-import hashlib
 import json
+import math
 import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -37,16 +39,17 @@ import duckdb
 import numpy as np
 import pandas as pd
 
-from core.logging import configure_logging, get_logger, run_context
-from core.settings import get_settings
-from ds.catalogue import Catalogue, DetectionConfig, load_catalogue, load_detection_config
+from core.logging import get_logger
+from ds.catalogue import (
+    Catalogue,
+    DateRange,
+    DetectionConfig,
+)
 from ds.detection import Detector, detect_range, forecast_period
 from ds.forecasting import load_series
 from pipelines.faults import (
-    SCENARIOS_PATH,
     Scenario,
     ScenarioWorkspace,
-    load_scenarios,
     measure_effect,
 )
 
@@ -67,13 +70,19 @@ def clean_forecasts(
     cfg: DetectionConfig,
     data_hash: str,
     cache_dir: Path,
+    period: DateRange | None = None,
 ) -> pd.DataFrame:
-    """Forecasts for the whole evaluation period on clean data, cached by data and detector version."""
-    cache = cache_dir / f"clean_forecasts_{data_hash[:12]}_{detector.version}.parquet"
+    """Forecasts for the whole period on clean data, cached by data, detector version and period.
+
+    `period` defaults to the 2018 evaluation period, and then the cache name is the Phase 3 one.
+    """
+    period = period or cfg.evaluation
+    suffix = "" if period == cfg.evaluation else f"_{period.start}_{period.end}"
+    cache = cache_dir / f"clean_forecasts_{data_hash[:12]}_{detector.version}{suffix}.parquet"
     if cache.is_file():
         return pd.read_parquet(cache)
     started = time.perf_counter()
-    fc = forecast_period(series, cfg.evaluation.start, cfg.evaluation.end, detector, catalogue, cfg)
+    fc = forecast_period(series, period.start, period.end, detector, catalogue, cfg)
     log.info("clean_forecasts_done", rows=len(fc), seconds=round(time.perf_counter() - started, 1))
     cache_dir.mkdir(parents=True, exist_ok=True)
     fc.to_parquet(cache, index=False)
@@ -100,6 +109,129 @@ def fault_caused_mask(anomalies: pd.DataFrame, clean_keys: set[tuple[str, ...]])
     return np.array([tuple(k) not in clean_keys for k in keys], dtype=bool)
 
 
+@dataclass(frozen=True)
+class ScenarioExtras:
+    """Optional Phase 3b measurements. Without it, `run_scenario` returns exactly the Phase 3 fields."""
+
+    strict_days: int = 3
+    alphas: tuple[float, ...] = ()
+    clean_by_alpha: dict[float, pd.DataFrame] = field(default_factory=dict)
+    clean_flag_keys: set[tuple[str, ...]] = field(default_factory=set)
+    share: Callable[[duckdb.DuckDBPyConnection, Scenario], float | None] | None = None
+
+
+FLAG_COLUMNS = [*KEY, "severity"]
+MONITORED_DIMENSIONS = ("customer_state", "category_en", "payment_type")
+
+
+def flagged_series(anoms: pd.DataFrame) -> pd.DataFrame:
+    """One row per flagged series: each anomaly's headline plus every related segment."""
+    rows: list[tuple[Any, ...]] = []
+    for r in anoms.itertuples():
+        rows.append((r.date, r.kpi, r.granularity, r.dimension, r.segment, r.severity))
+        for related in json.loads(r.related_segments):
+            dimension, segment = related.split("=", 1)
+            rows.append((r.date, r.kpi, r.granularity, dimension, segment, r.severity))
+    return pd.DataFrame(rows, columns=FLAG_COLUMNS)
+
+
+def flag_keys(anoms: pd.DataFrame) -> set[tuple[str, ...]]:
+    flags = flagged_series(anoms)
+    return set(map(tuple, flags[KEY].astype(str).to_numpy()))
+
+
+def targeted_mask(
+    flags: pd.DataFrame, s: Scenario, plan: dict[tuple[str, str, str], str]
+) -> np.ndarray:
+    """Which flagged series are the scenario's OWN series (strict recall).
+
+    A monitored dimension's own series is the target segment's series, or the dimension's pooled
+    `__other__` series when that segment is pooled for the KPI. Faults whose target is not a monitored
+    dimension (seller delay, pipeline bug) are targeted at the total series.
+    """
+    if s.dimension in MONITORED_DIMENSIONS:
+        own = (flags["dimension"] == s.dimension) & (flags["segment"] == s.value)
+        pooled = (
+            (flags["dimension"] == s.dimension)
+            & (flags["segment"] == "__other__")
+            & np.array(
+                [plan.get((k, s.dimension, s.value)) == "pooled" for k in flags["kpi"]], dtype=bool
+            )
+        )
+        return (own | pooled).to_numpy()
+    return (flags["dimension"] == "total").to_numpy()
+
+
+def _with_alpha(cfg: DetectionConfig, alpha: float) -> DetectionConfig:
+    return cfg.model_copy(update={"detection": cfg.detection.model_copy(update={"fdr_q": alpha})})
+
+
+def _extra_fields(
+    s: Scenario,
+    effect: dict[str, Any],
+    anomalies: pd.DataFrame,
+    plan: dict[tuple[str, str, str], str],
+    share: float | None,
+    extras: ScenarioExtras,
+    match_end: date,
+    fc: pd.DataFrame,
+    scn_series: pd.DataFrame,
+    days: list[date],
+    detector: Detector,
+    catalogue: Catalogue,
+    cfg: DetectionConfig,
+) -> dict[str, Any]:
+    from pipelines.dev_benchmark import size_band
+
+    flags = flagged_series(anomalies)
+    if len(flags):
+        caused = np.array(
+            [tuple(k) not in extras.clean_flag_keys for k in flags[KEY].astype(str).to_numpy()],
+            dtype=bool,
+        )
+        window = (flags["date"] >= effect["effect_start"]) & (
+            flags["date"] <= effect["effect_start"] + timedelta(days=extras.strict_days)
+        )
+        strict = flags[
+            caused
+            & targeted_mask(flags, s, plan)
+            & flags["kpi"].isin(s.affected_kpis).to_numpy()
+            & window.to_numpy()
+        ]
+    else:
+        strict = flags
+    first = strict["date"].min() if len(strict) else None
+
+    curve: dict[str, list[float]] = {}
+    for alpha in extras.alphas:
+        at_alpha = (
+            anomalies
+            if math.isclose(alpha, cfg.detection.fdr_q)
+            else detect_range(scn_series, fc, days, detector, catalogue, _with_alpha(cfg, alpha))[0]
+        )
+        clean_keys = set(map(tuple, extras.clean_by_alpha[alpha][KEY].astype(str).to_numpy()))
+        caused_a = at_alpha[fault_caused_mask(at_alpha, clean_keys)]
+        hits_a = caused_a[
+            caused_a["kpi"].isin(s.affected_kpis)
+            & (caused_a["date"] >= effect["effect_start"])
+            & (caused_a["date"] <= match_end)
+        ]
+        curve[str(alpha)] = sorted(float(x) for x in hits_a["severity"])
+
+    return {
+        "target_share": share,
+        "size_band": "total"
+        if s.dimension == "data_quality"
+        else (None if share is None else size_band(share)),
+        "strict_detected": bool(len(strict)),
+        "strict_delay_days": (first - effect["effect_start"]).days if first is not None else None,
+        "strict_series": sorted(
+            {f"{r.kpi}:{r.granularity}:{r.dimension}={r.segment}" for r in strict.itertuples()}
+        )[:6],
+        "curve_hit_severities": curve,
+    }
+
+
 def run_scenario(
     s: Scenario,
     clean_series: pd.DataFrame,
@@ -108,16 +240,31 @@ def run_scenario(
     detector: Detector,
     catalogue: Catalogue,
     cfg: DetectionConfig,
+    *,
+    warehouse: Path | None = None,
+    period: DateRange | None = None,
+    extras: ScenarioExtras | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
-    with ScenarioWorkspace() as ws:
+    period = period or cfg.evaluation
+    plan: dict[tuple[str, str, str], str] = {}
+    share: float | None = None
+    with ScenarioWorkspace(warehouse) as ws:
         ws.inject(s)
         ws.build_metrics()
         effect = measure_effect(ws, s)
         scn_series = load_series(ws.con, catalogue)
+        if extras is not None:
+            plan = {
+                (k, d, g): gr
+                for k, d, g, gr in ws.con.execute(
+                    "SELECT kpi, dimension, segment, granularity FROM metrics.series_plan"
+                ).fetchall()
+            }
+            share = extras.share(ws.con, s) if extras.share else None
     changed = changed_series(clean_series, scn_series)
-    start = max(effect["effect_start"], cfg.evaluation.start)
-    end = min(effect["effect_end"] + timedelta(days=RUN_TAIL_DAYS), cfg.evaluation.end)
+    start = max(effect["effect_start"], period.start)
+    end = min(effect["effect_end"] + timedelta(days=RUN_TAIL_DAYS), period.end)
     days = daterange(start, end)
     fc = clean_fc[~clean_fc["unique_id"].isin(changed)]
     if changed:
@@ -139,7 +286,7 @@ def run_scenario(
     magnitude = effect["segment_relative_change"]
     if magnitude is None:
         magnitude = effect["total_relative_change"]
-    return {
+    row: dict[str, Any] = {
         "id": s.id,
         "fault_type": s.fault_type,
         "dimension": s.dimension,
@@ -163,6 +310,25 @@ def run_scenario(
         )[:6],
         "seconds": round(time.perf_counter() - started, 1),
     }
+    if extras is not None:
+        row.update(
+            _extra_fields(
+                s,
+                effect,
+                anomalies,
+                plan,
+                share,
+                extras,
+                match_end,
+                fc,
+                scn_series,
+                days,
+                detector,
+                catalogue,
+                cfg,
+            )
+        )
+    return row
 
 
 def band(m: float | None) -> str:
@@ -293,101 +459,15 @@ def render(
     return "\n".join(lines) + "\n"
 
 
-def main() -> None:
-    configure_logging()
-    settings = get_settings()
-    catalogue, cfg, detector = load_catalogue(), load_detection_config(), Detector.load()
-    scenarios = load_scenarios()
-    scenarios_hash = hashlib.sha256(SCENARIOS_PATH.read_bytes()).hexdigest()[:12]
-    with run_context(component="detection_eval"):
-        from evaluation.tracking import git_sha, tracked_run
+def main(argv: list[str] | None = None) -> None:
+    """Entry point for `python -m evaluation.detection`: delegates to the protocol runner.
 
-        con = duckdb.connect(str(settings.duckdb_path), read_only=True)
-        try:
-            data_hash = con.execute(
-                "SELECT value FROM meta.build WHERE key = 'data_hash'"
-            ).fetchall()[0][0]
-            series = load_series(con, catalogue)
-        finally:
-            con.close()
-        fc = clean_forecasts(
-            series, detector, catalogue, cfg, data_hash, settings.reports_dir / "cache"
-        )
-        clean_days = daterange(cfg.evaluation.start, cfg.evaluation.end)
-        clean_anoms, clean_tests = detect_range(series, fc, clean_days, detector, catalogue, cfg)
-        log.info("clean_run_done", anomalies=len(clean_anoms), tests=clean_tests)
+    With no arguments it runs the 2018 protocol on the Phase 3 benchmark, as before, now with
+    the extended breakdowns (strict recall, size bands, operating curve, false-alarm causes).
+    """
+    from evaluation.protocol import main as protocol_main
 
-        rows = []
-        for s in scenarios:
-            row = run_scenario(s, series, fc, clean_anoms, detector, catalogue, cfg)
-            log.info(
-                "scenario_done",
-                id=s.id,
-                detected=row["detected"],
-                delay=row["delay_days"],
-                seconds=row["seconds"],
-            )
-            rows.append(row)
-        results = pd.DataFrame(rows)
-        summary = summarise(results, clean_anoms, len(clean_days), clean_tests)
-        meta = {
-            "git_sha": git_sha(),
-            "data_hash": data_hash,
-            "detector_version": detector.version,
-            "scenarios_hash": scenarios_hash,
-        }
-
-        out = settings.reports_dir
-        out.mkdir(parents=True, exist_ok=True)
-        (out / "detection_eval.md").write_text(
-            render(summary, results, clean_anoms, meta), encoding="utf-8"
-        )
-        (out / "detection_eval.json").write_text(
-            json.dumps(
-                {
-                    "meta": meta,
-                    "summary": summary,
-                    "scenarios": rows,
-                    "clean_anomalies": clean_anoms.astype(str).to_dict("records"),
-                },
-                indent=2,
-                default=str,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-
-        import mlflow
-
-        with tracked_run(
-            "detection_eval",
-            "mvp_benchmark",
-            {
-                "data_hash": data_hash,
-                "detector_version": detector.version,
-                "scenarios_hash": scenarios_hash,
-                "seed": "42",
-            },
-        ):
-            mlflow.log_params(
-                {
-                    "fdr_q": cfg.detection.fdr_q,
-                    "interval_level": detector.level,
-                    "scenarios": len(scenarios),
-                    "evaluation_start": str(cfg.evaluation.start),
-                    "evaluation_end": str(cfg.evaluation.end),
-                }
-            )
-            mlflow.log_metrics(
-                {
-                    k: float(v)
-                    for k, v in summary.items()
-                    if isinstance(v, int | float) and not isinstance(v, bool) and v is not None
-                }
-            )
-            mlflow.log_artifact(str(out / "detection_eval.md"))
-            mlflow.log_artifact(str(out / "detection_eval.json"))
-        print((out / "detection_eval.md").read_text(encoding="utf-8"))
+    protocol_main(argv)
 
 
 if __name__ == "__main__":

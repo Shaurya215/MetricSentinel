@@ -116,9 +116,18 @@ Recall at 20% or more against clean alarms per 30 days, for FDR level in {0.01, 
 
 *None yet.*
 
-## 15. Deviations from this protocol
+## 15. Deviations and clarifications
 
-*None yet. Any deviation is recorded here with its date and reason, before the affected run.*
+Recorded with the date and reason, before the affected run.
+
+* **2026-10-26, strict recall (owner instruction).** The strict figure is defined as: a fault-caused alert on an affected KPI, on the **targeted segment's own series, within 3 days of the first affected day**. For a monitored dimension the own series is the target segment's series, or the dimension's pooled `__other__` series when the segment is pooled for that KPI; for faults not aimed at a monitored dimension (seller delay, pipeline bug) it is the total series. A flagged series counts whether it is an alert's headline or one of its related segments. This **replaces** the "targeted-series recall" bullet in section 6, which used the 7-day tail. The lenient figure keeps the Phase 3 definition.
+* **2026-10-26, which recall is compared with NFR-021.** The **lenient** figure, because the baseline was measured that way and a comparison must be like for like. The strict figure is shown beside it as the more demanding reading, with its own Wilson interval.
+* **2026-10-26, what "exactly" means for the golden tests.** Running the capture twice showed that DuckDB's multi-threaded floating-point sums differ in the last digit (about 1 part in 10^16) between runs. Every **discrete** value (alert keys, counts, recall, delays, booleans) must match exactly; floats are compared to a relative 1e-9. The real-data golden compares alert keys and counts exactly and ratios of integers exactly.
+* **2026-10-26, golden regression runs on 2018.** The check that all flags off reproduces the Phase 3 baseline on the real 2018 data is a **regression check**, not an evaluation: it reproduces numbers that are already known and its output is asserted equal to them, so it creates no new information and nothing is tuned from it. It was run once at the end of step 1 and **passed** (9/16, 9.26 false alarms per 30 days, 75 alerts, every scenario outcome identical; 16 minutes). It is run again before the final run if code on the baseline path changed. It is separate from the one final evaluation run of section 13.
+* **2026-10-26, seller-delay start dates.** A delay moves deliveries later, so the measurable effect extends beyond the 14-day window by the delay. The placement rule is unchanged (fault effect plus the 7-day tail must not overlap Black Friday week or the Christmas window); applied to seller delay it narrows the allowed start range by the delay length.
+* **2026-10-26, reporting helpers written in step 1.** `ds/calendar.py` (calendar window definitions, also used to place faults) and `evaluation/breakdown.py` (`last_reliable_day`, the false-alarm classifier, the known-event matcher) are reporting utilities needed by E and by the benchmark. They change no alert. The guard behaviour (A), the log scale (B), the share test (C) and the severity tagging (D) are **not yet written**, and the configuration flags for them refuse to switch on.
+* **2026-10-26, event dates and timezones.** Events are compared as plain **Brazilian local calendar dates**. Olist timestamps are naive local time with no timezone, and nothing in the date path converts one. The matcher rejects datetimes and timezone-aware values instead of silently shifting them (tested, including that a 02:30 UTC instant on 18 June is the 17 June local date).
+* **2026-10-26, development baseline.** `baseline-dev` is the Phase 3 detector refitted on the fit period only (2017-04-26 to 2017-08-27), written to `config/detector_dev2017_baseline.json`. AutoARIMA is skipped in this refit because it is report-only and never selectable. Calibration therefore comes from about 8 weeks, which makes the intervals conservative (calibrated coverage 91% to 99% on the second half of the fit period).
 
 ## 16. Alternatives considered
 

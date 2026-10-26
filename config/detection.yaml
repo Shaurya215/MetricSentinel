@@ -39,3 +39,22 @@ events:
   - name: black_friday_2017
     start: 2017-11-23
     end: 2017-11-29
+
+# Phase 3b switches (docs/decisions/ADR-phase3b.md). All false = the Phase 3 detector exactly.
+improvements:
+  feed_guard: false # A
+  log_gmv: false # B
+  share_test: false # C
+  calendar_downgrade: false # D
+
+# Phase 3b development protocol: 2017 only (2018 is already contaminated by diagnosis).
+# Fit period: model choice and calibration. Test period: the 2017 benchmark and clean days.
+development:
+  fit:
+    start: 2017-04-26
+    end: 2017-08-27
+  test:
+    start: 2017-08-28
+    end: 2017-12-31
+  benchmark_seed: 3101
+  first_fault_start: 2017-09-18 # earliest fault start in the 2017 benchmark (ADR section 5)

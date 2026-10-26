@@ -3,7 +3,7 @@
 # macOS and the Ubuntu CI runner. Run `make` or `make help` for the list.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup lint format test test-all data eda data-sample backtest detect scenarios eval-detection eval up down logs health clean
+.PHONY: help setup lint format test test-all golden data eda data-sample backtest detect scenarios scenarios-dev2017 backtest-dev eval-dev2017 eval-detection eval up down logs health clean
 
 PY := uv run python
 
@@ -25,10 +25,13 @@ format: ## Auto-fix lint issues and format the code
 	uv run ruff format .
 
 test: ## Fast test suite (no Postgres, no warehouse, no evals)
-	uv run pytest -m "not integration and not eval"
+	uv run pytest -m "not integration and not eval and not golden"
 
 test-all: ## Every test, including integration (needs `make up`)
 	uv run pytest
+
+golden: ## Reproduce the real-data Phase 3 baseline exactly (slow, needs the warehouse)
+	uv run pytest -m golden tests/golden/test_real_baseline.py
 
 data: ## Download/verify Olist and build the DuckDB warehouse + quality report
 	uv run python -m pipelines.build
@@ -49,6 +52,15 @@ detect: ## Detect anomalies for one simulated day: make detect DATE=2018-03-05
 
 scenarios: ## Regenerate the 30-scenario fault benchmark (config/scenarios/mvp.yaml)
 	uv run python -m pipelines.faults generate
+
+scenarios-dev2017: ## Regenerate the 54-scenario 2017 development benchmark (seed 3101)
+	uv run python -m pipelines.dev_benchmark
+
+backtest-dev: ## Refit the baseline on the 2017 fit period only (config/detector_dev2017_baseline.json)
+	uv run python -m ds.backtest --dev baseline
+
+eval-dev2017: ## Detection evaluation on the 2017 development protocol
+	uv run python -m evaluation.detection --protocol dev2017
 
 eval-detection: ## Detection evaluation on the fault benchmark + clean 2018 days
 	uv run python -m evaluation.detection

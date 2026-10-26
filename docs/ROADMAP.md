@@ -391,3 +391,8 @@ MetricSentinel/
 | 2026-10-23 | Volume KPIs (`orders`, `gmv`) alert in both directions | A pipeline bug that duplicates rows is a spike, although the business "bad" direction is down |
 | 2026-10-23 | Bug fixed after the first evaluation: zero-count days were never tested for count/sum KPIs | Scenario S28 (all orders dropped for a day) was missed |
 | 2026-10-23 | NFR-021 not met; detector NOT re-tuned on the 2018 evaluation data | Tuning on the scored data would make the numbers meaningless; fixes are listed in AI_ML_PLAN 2.5 and need a fresh benchmark |
+| 2026-10-26 | Phase 3b scope and protocol pre-registered in `docs/decisions/ADR-phase3b.md`: one improvement round (A guard, B log GMV, C share test, D calendar tagging, E reporting), 2017-only development, one final 2018 run labelled "post-diagnosis, not held-out" | NFR-021 missed in Phase 3 |
+| 2026-10-26 | Stop rule for 3b: one iteration only; a change that does not help on 2017 is dropped and recorded; no tuning on 2018 | Keep the results honest |
+| 2026-10-26 | Git tag `phase-3-baseline` placed on `5c385bc` (the commit that produced the Phase 3 results) | Baseline kept next to every 3b result |
+| 2026-10-26 | NFR-021 note: the original 0.80 recall target was not met in Phase 3 (56.2% at >= 20% magnitude); recall will also be reported by segment size and with a strict definition; the target text itself is unchanged | See REQUIREMENTS.md when the final numbers exist |
+| 2026-10-26 | 3b steps 1 and 2 done: evaluation takes a protocol; extended reporting; 2017 benchmark (seed 3101, 54 scenarios); 2017 baseline measured; real-data golden test reproduces the Phase 3 baseline exactly | A, B, C and D are not written yet |

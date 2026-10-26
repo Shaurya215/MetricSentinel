@@ -119,11 +119,12 @@ strict_optional = true
 minversion = "8.0"
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-q --strict-markers --strict-config"
+addopts = "-q --strict-markers --strict-config -m 'not golden'"
 markers = [
     "unit: fast, no external services",
     "integration: needs Postgres or the warehouse",
     "eval: evaluation-suite gate, run on demand",
+    "golden: reproduces the real-data Phase 3 baseline exactly; slow, needs the warehouse",
 ]
 
 [tool.coverage.run]
