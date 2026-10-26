@@ -112,7 +112,7 @@ class DetectionRule(_Strict):
     fdr_q: float = Field(gt=0, lt=1)
 
 
-IMPLEMENTED_FLAGS = frozenset({"feed_guard"})  # extended as each 3b change is written
+IMPLEMENTED_FLAGS = frozenset({"feed_guard", "log_gmv", "share_test", "calendar_downgrade"})
 
 
 class FeedGuardConfig(_Strict):
@@ -208,3 +208,13 @@ def with_flags(cfg: DetectionConfig, names: list[str] | tuple[str, ...]) -> Dete
     if unknown:
         raise ValueError(f"unknown flag(s): {sorted(unknown)}")
     return cfg.model_copy(update={"improvements": ImprovementFlags(**dict.fromkeys(names, True))})
+
+
+def transforms_for(cfg: DetectionConfig) -> dict[str, str]:
+    """KPIs forecast on a transformed scale under the given flags (change B: GMV only)."""
+    return {"gmv": "log1p"} if cfg.improvements.log_gmv else {}
+
+
+def share_kpis_for(cfg: DetectionConfig) -> tuple[str, ...]:
+    """Additive KPIs whose segment series are tested as a share of the total (change C)."""
+    return ("orders", "gmv") if cfg.improvements.share_test else ()

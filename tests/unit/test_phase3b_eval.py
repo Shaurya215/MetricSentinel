@@ -335,13 +335,13 @@ def test_faults_not_aimed_at_a_monitored_dimension_target_the_total() -> None:
 # ---------------------------------------------------------------------------
 # Flags and development protocol
 # ---------------------------------------------------------------------------
-def test_all_3b_flags_are_off_and_only_implemented_ones_can_be_switched_on() -> None:
+def test_all_3b_flags_are_off_by_default_and_unknown_flags_are_rejected() -> None:
     cfg = load_detection_config()
     assert not any(cfg.improvements.model_dump().values())
-    assert ImprovementFlags(feed_guard=True).feed_guard is True  # change A is implemented
-    for flag in ("log_gmv", "share_test", "calendar_downgrade"):  # B, C, D are not (yet)
-        with pytest.raises(ValidationError, match="not implemented yet"):
-            ImprovementFlags(**{flag: True})
+    for flag in ImprovementFlags.model_fields:  # A, B, C and D are all implemented now
+        assert getattr(ImprovementFlags(**{flag: True}), flag) is True
+    with pytest.raises(ValidationError):
+        ImprovementFlags(not_a_flag=True)  # type: ignore[call-arg]
 
 
 def test_development_protocol_matches_the_adr() -> None:

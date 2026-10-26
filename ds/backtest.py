@@ -34,13 +34,23 @@ import pandas as pd
 
 from core.logging import configure_logging, get_logger, run_context
 from core.settings import REPO_ROOT, get_settings
-from ds.catalogue import Catalogue, DetectionConfig, load_catalogue, load_detection_config
+from ds.catalogue import (
+    Catalogue,
+    DetectionConfig,
+    load_catalogue,
+    load_detection_config,
+    share_kpis_for,
+    transforms_for,
+    with_flags,
+)
 from ds.forecasting import (
     DAILY_CANDIDATES,
     WEEKLY_CANDIDATES,
     ForecastSpec,
+    apply_transforms,
     clean_history,
     forecast_origins,
+    group_name,
     load_series,
     mondays,
 )
@@ -76,10 +86,17 @@ def candidate_models(series: pd.DataFrame, include_arima: bool = True) -> dict[s
 
 
 def mase_scale(
-    series: pd.DataFrame, before: pd.Timestamp, cfg: DetectionConfig, spec: ForecastSpec
+    series: pd.DataFrame,
+    before: pd.Timestamp,
+    cfg: DetectionConfig,
+    spec: ForecastSpec,
+    transforms: dict[str, str] | None = None,
 ) -> pd.Series:
-    """Per-series MASE denominator: in-sample MAE of the seasonal naive forecast before the backtest."""
-    hist = clean_history(series[series["ds"] < before], cfg)
+    """Per-series MASE denominator: in-sample MAE of the seasonal naive forecast before the backtest.
+
+    Series forecast on a log scale (change B) get their denominator on that scale too.
+    """
+    hist, _ = apply_transforms(clean_history(series[series["ds"] < before], cfg), transforms)
     scales = {}
     for uid, g in hist.groupby("unique_id"):
         m = spec.daily_season if g["granularity"].iloc[0] == "daily" else spec.weekly_season
@@ -94,6 +111,8 @@ def score(
     scales: pd.Series,
     catalogue: Catalogue,
     cfg: DetectionConfig,
+    transforms: dict[str, str] | None = None,
+    share_kpis: tuple[str, ...] = (),
 ) -> pd.DataFrame:
     actual = series[["unique_id", "ds", "y", "n", "min_n", "kpi", "dimension", "granularity"]]
     pts = fc.merge(actual, on=["unique_id", "ds"], how="inner")
@@ -105,15 +124,29 @@ def score(
         hit = (week_start <= pd.Timestamp(event.end)) & (pts["ds"] >= pd.Timestamp(event.start))
         pts = pts[~hit]
     family = {k.name: k.family for k in catalogue.kpis}
+    # Series forecast on a log scale are scored on that scale (error, interval, coverage); the
+    # sMAPE is always computed in the original units.
+    is_log = (
+        pts["model_scale"].eq("log1p")
+        if "model_scale" in pts.columns
+        else pd.Series(False, index=pts.index)
+    )
+    y_model = np.where(is_log, np.log1p(pts["y"].clip(lower=0)), pts["y"])
+    yhat_orig = np.where(is_log, np.expm1(pts["yhat"]), pts["yhat"])
     pts = pts.assign(
-        group=[group_of(family[k], g) for k, g in zip(pts["kpi"], pts["granularity"], strict=True)],
-        err=pts["y"] - pts["yhat"],
+        group=[
+            group_name(k, d, family[k], g, transforms, share_kpis)
+            for k, d, g in zip(pts["kpi"], pts["dimension"], pts["granularity"], strict=True)
+        ],
+        err=y_model - pts["yhat"],
         half=(pts["hi"] - pts["lo"]) / 2,
     )
     pts = pts.join(scales, on="unique_id")
     pts["abs_scaled_err"] = pts["err"].abs() / pts["scale"]
-    pts["smape"] = 2 * pts["err"].abs() / (pts["y"].abs() + pts["yhat"].abs()).replace(0, np.nan)
-    pts["covered"] = (pts["y"] >= pts["lo"]) & (pts["y"] <= pts["hi"])
+    pts["smape"] = (
+        2 * np.abs(pts["y"] - yhat_orig) / (pts["y"].abs() + np.abs(yhat_orig)).replace(0, np.nan)
+    )
+    pts["covered"] = (y_model >= pts["lo"]) & (y_model <= pts["hi"])
     pts["ratio"] = pts["err"].abs() / pts["half"].where(pts["half"] > 0)
     return pts
 
@@ -177,6 +210,27 @@ def select(summary: pd.DataFrame, pts: pd.DataFrame, level: int) -> dict[str, An
     return chosen
 
 
+def fit_skewness(series: pd.DataFrame, start: Any, end: Any) -> dict[str, dict[str, float]]:
+    """Skewness of every KPI's daily total in the fit period (reported for change B; GMV is the only one transformed)."""
+    from scipy.stats import skew
+
+    window = series[
+        (series["dimension"] == "total")
+        & (series["granularity"] == "daily")
+        & (series["ds"] >= pd.Timestamp(start))
+        & (series["ds"] <= pd.Timestamp(end))
+    ]
+    out: dict[str, dict[str, float]] = {}
+    for kpi, g in window.groupby("kpi"):
+        values = g["y"].dropna().to_numpy(dtype=float)
+        if len(values) > 2:
+            out[kpi] = {
+                "skewness": float(skew(values)),
+                "skewness_log1p": float(skew(np.log1p(np.clip(values, 0, None)))),
+            }
+    return out
+
+
 def run_backtest(
     con: duckdb.DuckDBPyConnection,
     *,
@@ -191,7 +245,8 @@ def run_backtest(
         cfg.forecast.daily_season_length,
         cfg.forecast.weekly_season_length,
     )
-    series = load_series(con, catalogue)
+    transforms, share = transforms_for(cfg), share_kpis_for(cfg)
+    series = load_series(con, catalogue, share)
     series = series[series["ds"] <= pd.Timestamp(cfg.backtest.end)]
     origins = [
         o
@@ -199,7 +254,9 @@ def run_backtest(
         if o + pd.Timedelta(days=6).to_pytimedelta() >= cfg.backtest.start
     ]
     started = time.perf_counter()
-    fc = forecast_origins(series, origins, candidate_models(series, include_arima), spec, cfg)
+    fc = forecast_origins(
+        series, origins, candidate_models(series, include_arima), spec, cfg, transforms or None
+    )
     fc = fc[
         (fc["ds"] >= pd.Timestamp(cfg.backtest.start))
         & (fc["ds"] <= pd.Timestamp(cfg.backtest.end))
@@ -207,8 +264,8 @@ def run_backtest(
     log.info(
         "backtest_forecasts_done", rows=len(fc), seconds=round(time.perf_counter() - started, 1)
     )
-    scales = mase_scale(series, pd.Timestamp(cfg.backtest.start), cfg, spec)
-    pts = score(fc, series, scales, catalogue, cfg)
+    scales = mase_scale(series, pd.Timestamp(cfg.backtest.start), cfg, spec, transforms or None)
+    pts = score(fc, series, scales, catalogue, cfg, transforms, share)
     split = (
         pd.Timestamp(cfg.backtest.start)
         + (pd.Timestamp(cfg.backtest.end) - pd.Timestamp(cfg.backtest.start)) / 2
@@ -229,6 +286,10 @@ def run_backtest(
         },
         "selection_rule": f"narrowest calibrated interval among models with >= {MIN_HOLDOUT_COVERAGE:.0%} calibrated coverage on the second half",
         "groups": chosen,
+        "transforms": transforms,
+        "share_kpis": list(share),
+        "flags": [n for n, on in cfg.improvements.model_dump().items() if on],
+        "skewness_fit": fit_skewness(series, cfg.backtest.start, cfg.backtest.end),
     }
     return summary, totals, detector
 
@@ -284,10 +345,14 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--dev", metavar="NAME", help="development backtest on the 2017 fit period only"
     )
+    parser.add_argument("--flags", default="", help="comma-separated 3b flags to switch on")
     args = parser.parse_args(argv)
     configure_logging()
     settings = get_settings()
     cfg = load_detection_config()
+    flag_names = [f for f in args.flags.split(",") if f]
+    if flag_names:
+        cfg = with_flags(cfg, flag_names)
     detector_path, suffix, include_arima = DETECTOR_PATH, "", True
     if args.dev:
         if cfg.development is None:

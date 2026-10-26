@@ -320,10 +320,54 @@ unknown-category soft limit 2.5% (observed 1.44%), and the "no gaps" check now u
 
 The Olist data does not end cleanly. In the Phase 3 evaluation, orders fell to 14, 4 and 1 on the last three days of August 2018, and the Phase 2 window rule (a trailing 7-day mean) let those days into the monitoring window.
 
-**Rule (fixed 2026-10-26, before any 3b run):** a day is a *collapse day* if total orders are below 35% of the median total orders of the previous 28 days. The **last reliable day** is the last day before the terminal run of consecutive collapse days that ends at the last day of the data. Days after it are not tested and are logged as suppressed.
+**The rule (fixed 2026-10-26, before any 3b result existed, and not to be tuned):**
 
-**Label: validity rule defined after diagnosis.** It was written after the end-of-data drop had been seen in the Phase 3 evaluation, so it is not a held-out finding.
+1. A day is a **collapse day** if its total orders are below **35%** of the **median of the total orders of the previous 28 days**.
+2. The **last reliable day** is the day before the **terminal run** of consecutive collapse days that ends at the last day of the data. If the data does not end in a collapse, it is the last day of the data.
+3. Days after the last reliable day are **not tested** and raise **no alert**; they are logged as suppressed, and are not counted as clean tested days.
+4. Separately, on any collapse day the guard raises one alert, "volume collapse (data feed or business)", and suppresses every other test that day.
 
-**Value:** to be computed by `ds/feed_guard.py` and recorded here when it runs. It is not stated in advance, so that the code, not the author, produces it.
+**Value, computed by `ds/feed_guard.py` on the real warehouse (data_hash 97f3df47...): 2018-08-24.** The collapse days after it are 25, 26, 27, 28, 29, 30 and 31 August 2018. The date is stored in `config/detection.yaml` (`feed_guard.data_end`), and `python -m ds.feed_guard --check` recomputes it from the warehouse and fails if the two differ.
 
-The Phase 2 monitoring-window rule is corrected to use a centred rolling mean, and the EDA is re-run; the new window and its effect on `docs/DATA_PLAN.md` section 14 are recorded when that is done.
+**Label: validity rule defined after diagnosis.** It was written after the end-of-data drop had been seen in the Phase 3 evaluation. It uses the future of the series (the terminal run), so it applies to a finished dataset and cannot be applied causally day by day; the per-day collapse rule (point 4) can.
+
+**Side finding (recorded before the 2017 evaluation).** The same collapse rule also fires on 2017-06-21 (fit period) and on **2017-12-24**, a legitimate holiday day (59 orders, 27% of the norm). It does not fire on 25 December (41%). No exemption was added.
+
+### Phase 2 window rule corrected (Phase 3b)
+
+The monitoring-window rule used a trailing 7-day mean, which lags. It now uses a **centred** 7-day mean (the first and last three days have no full window and are not dense). Same floor (37 orders), same longest-run rule.
+
+| | Before (trailing) | After (centred) |
+|---|---|---|
+| Dense window | 2017-01-26 to 2018-08-31 | 2017-01-23 to 2018-08-28 |
+| Warm-up start | 2017-01-26 | 2017-01-23 |
+| First detection date | 2017-04-26 | 2017-04-23 |
+| Monitored days | 493 | 493 |
+
+The correction moves **both** ends three days earlier. It does **not** remove the first collapse days: 25 to 28 August are still inside the corrected window, which is why the last reliable day is defined by the collapse rule above and not by the window rule.
+
+**`config/detection.yaml` keeps `monitoring_window` 2017-01-26 to 2018-08-31.** Changing it would move the metric-store dates and the series plan and so change the Phase 3 baseline, which must stay reproducible (the golden tests reproduce it exactly). The corrected window is documented here and used by the EDA only.
+
+The figures in section 14 above were computed on the old window. Recomputed on the corrected window, these figures moved by more than 0.5% (everything not listed moved less):
+
+| Figure | Old window | Corrected window |
+|---|---|---|
+| Dense window start | 2017-01-26 | 2017-01-23 |
+| Dense window end | 2018-08-31 | 2018-08-28 |
+| Warm-up start | 2017-01-26 | 2017-01-23 |
+| First detection date | 2017-04-26 | 2017-04-23 |
+| Weekday index, Friday | 0.987 | 0.998 |
+| Weekday index, Monday | 1.145 | 1.133 |
+| Weekday index, Thursday | 1.03 | 1.04 |
+| Weekday index, Tuesday | 1.127 | 1.115 |
+| orders, coefficient_of_variation | 0.5199 | 0.5173 |
+| aov, share_of_days_with_sample_ge_30 | 0.9931 | 0.9983 |
+| freight_ratio, share_of_days_with_sample_ge_30 | 0.9931 | 0.9983 |
+| late_delivery_rate, mean | 0.06797 | 0.06723 |
+| late_delivery_rate, std | 0.08634 | 0.08574 |
+| avg_review_score, share_of_days_with_sample_ge_30 | 0.8216 | 0.8165 |
+| low_review_rate, share_of_days_with_sample_ge_30 | 0.8216 | 0.8165 |
+| customer_state, reviews, weekly series | 5 | 4 |
+| customer_state, reviews, excluded series | 22 | 23 |
+
+These values are copied from `data/reports/eda_findings.json` by a script, not typed by hand.

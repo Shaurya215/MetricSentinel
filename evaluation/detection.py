@@ -81,7 +81,10 @@ def clean_forecasts(
     suffix = "" if period == cfg.evaluation else f"_{period.start}_{period.end}"
     cache = cache_dir / f"clean_forecasts_{data_hash[:12]}_{detector.version}{suffix}.parquet"
     if cache.is_file():
-        return pd.read_parquet(cache)
+        cached = pd.read_parquet(cache)
+        if "model_scale" not in cached.columns:
+            cached["model_scale"] = "raw"  # written before change B existed
+        return cached
     started = time.perf_counter()
     fc = forecast_period(series, period.start, period.end, detector, catalogue, cfg)
     log.info("clean_forecasts_done", rows=len(fc), seconds=round(time.perf_counter() - started, 1))
@@ -257,7 +260,7 @@ def run_scenario(
         ws.inject(s)
         ws.build_metrics()
         effect = measure_effect(ws, s)
-        scn_series = load_series(ws.con, catalogue)
+        scn_series = load_series(ws.con, catalogue, detector.share_kpis)
         if extras is not None:
             plan = {
                 (k, d, g): gr

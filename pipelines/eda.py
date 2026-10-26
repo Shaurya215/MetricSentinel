@@ -62,7 +62,9 @@ def monitoring_window(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
     ).df()
     typical = float(daily.loc[daily["n"] > 0, "n"].median())
     floor = max(MIN_DAILY_ORDERS, DENSITY_FRACTION * typical)
-    daily["rolling7"] = daily["n"].rolling(7, min_periods=7).mean()
+    # Centred, not trailing: a trailing mean lags and let the collapsing last days of the data into the
+    # window (Phase 3b correction). The first and last 3 days have no full window and are not dense.
+    daily["rolling7"] = daily["n"].rolling(7, center=True, min_periods=7).mean()
     daily["dense"] = daily["rolling7"] >= floor
     best_start = best_len = run_start = run_len = 0
     for i, dense in enumerate(daily["dense"].tolist()):
@@ -85,7 +87,7 @@ def monitoring_window(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
         "last_order_date": str(daily["date"].iloc[-1].date()),
         "typical_daily_orders_median": typical,
         "dense_day_floor": floor,
-        "rule": f"dense day = 7-day mean >= max({MIN_DAILY_ORDERS}, {DENSITY_FRACTION} x median daily orders); "
+        "rule": f"dense day = centred 7-day mean >= max({MIN_DAILY_ORDERS}, {DENSITY_FRACTION} x median daily orders); "
         "window = longest run of dense days",
         "orders_by_month": by_month,
     }

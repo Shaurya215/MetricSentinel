@@ -44,6 +44,8 @@ from ds.catalogue import (
     DetectionConfig,
     load_catalogue,
     load_detection_config,
+    share_kpis_for,
+    transforms_for,
     with_flags,
 )
 from ds.detection import Detector, detect_range
@@ -174,12 +176,20 @@ def run_protocol(
 ) -> ProtocolResult:
     catalogue = catalogue or load_catalogue()
     cfg = cfg or load_detection_config()
+    if dict(detector.transforms) != transforms_for(cfg) or tuple(
+        detector.share_kpis
+    ) != share_kpis_for(cfg):
+        raise ValueError(
+            "detector and flags disagree: the detector was fitted with transforms "
+            f"{detector.transforms} and share KPIs {detector.share_kpis}, but the flags ask for "
+            f"{transforms_for(cfg)} and {share_kpis_for(cfg)}. Refit with `ds.backtest --dev NAME --flags ...`."
+        )
     con = duckdb.connect(str(warehouse), read_only=True)
     try:
         data_hash = con.execute("SELECT value FROM meta.build WHERE key = 'data_hash'").fetchall()[
             0
         ][0]
-        series = load_series(con, catalogue)
+        series = load_series(con, catalogue, detector.share_kpis)
     finally:
         con.close()
 
@@ -298,6 +308,39 @@ def _within(
     return fraction(int(hit.sum()), len(subset))
 
 
+def _calendar_block(clean_anoms: pd.DataFrame) -> dict[str, Any]:
+    """Change D: how many alerts are calendar-uncertain, how they group, and where they sit against
+    the investigation threshold. The headline false-alarm figure stays the alerts BEFORE grouping."""
+    if "calendar_uncertain" not in clean_anoms.columns:
+        return {"enabled": False}
+    from ds.detection import (
+        CALENDAR_SEVERITY_FACTOR,
+        INVESTIGATION_THRESHOLD,
+        group_calendar_alerts,
+    )
+
+    uncertain = clean_anoms[clean_anoms["calendar_uncertain"]]
+    records = group_calendar_alerts(clean_anoms)
+    flagged = records[records["calendar_uncertain"]] if len(records) else records
+    raw = uncertain["severity"] / CALENDAR_SEVERITY_FACTOR
+    return {
+        "enabled": True,
+        "alerts_before_grouping": len(clean_anoms),
+        "uncertain_alerts": len(uncertain),
+        "records_after_grouping": len(records),
+        "uncertain_records": len(flagged),
+        "investigation_threshold": INVESTIGATION_THRESHOLD,
+        "uncertain_records_at_or_above_threshold": int(
+            (flagged["severity"] >= INVESTIGATION_THRESHOLD).sum()
+        ),
+        "uncertain_records_below_threshold": int(
+            (flagged["severity"] < INVESTIGATION_THRESHOLD).sum()
+        ),
+        "uncertain_alerts_raw_severity_below_threshold": int((raw < INVESTIGATION_THRESHOLD).sum()),
+        "windows": sorted(set(uncertain["calendar_window"])) if len(uncertain) else [],
+    }
+
+
 def extended_summary(
     results: pd.DataFrame,
     clean_anoms: pd.DataFrame,
@@ -315,6 +358,7 @@ def extended_summary(
     }
     diag = guard_info["diagnostics"]
     guard_clean = clean_anoms[is_guard_alert(clean_anoms)] if len(clean_anoms) else clean_anoms
+    calendar = _calendar_block(clean_anoms)
     per30 = (lambda n: n / clean_days_n * 30) if clean_days_n else (lambda n: float("nan"))
     lenient_ge20, strict_ge20 = (
         _recall(results, "detected", ge20),
@@ -416,6 +460,7 @@ def extended_summary(
                 "ge20": _recall(results, "strict_detected_ex_guard", ge20),
             },
         },
+        "calendar": calendar,
         "operating_curve": curve,
     }
 
@@ -495,6 +540,21 @@ def render_protocol(r: ProtocolResult) -> str:
             f"| lenient, all | {_fmt(x['lenient']['all'])} | {_fmt(g['lenient_ex_guard']['all'])} |",
             f"| strict, >= 20% | {_fmt(x['strict']['ge20'])} | {_fmt(g['strict_ex_guard']['ge20'])} |",
             f"| strict, all | {_fmt(x['strict']['all'])} | {_fmt(g['strict_ex_guard']['all'])} |",
+        ]
+    else:
+        lines.append("Not enabled for this run.")
+    cal = x["calendar"]
+    lines += ["", "## Calendar windows (change D)", ""]
+    if cal["enabled"]:
+        lines += [
+            f"- Alerts before grouping (the headline figure): {cal['alerts_before_grouping']}; "
+            f"{cal['uncertain_alerts']} of them are calendar-uncertain (windows: {', '.join(cal['windows']) or 'none'}).",
+            f"- After grouping consecutive days into one record (FR-033): {cal['records_after_grouping']} records, "
+            f"{cal['uncertain_records']} calendar-uncertain.",
+            f"- Investigation threshold {cal['investigation_threshold']}: calendar-uncertain records at or above it: "
+            f"{cal['uncertain_records_at_or_above_threshold']}, below it: {cal['uncertain_records_below_threshold']}. "
+            f"A calendar-uncertain alert falls below the threshold only when its raw severity is under 2.0 "
+            f"({cal['uncertain_alerts_raw_severity_below_threshold']} alerts here).",
         ]
     else:
         lines.append("Not enabled for this run.")

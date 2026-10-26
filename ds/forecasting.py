@@ -13,7 +13,7 @@ interpolation. Black Friday would otherwise inflate every later interval.
 from __future__ import annotations
 
 import warnings
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -28,6 +28,48 @@ from ds.catalogue import Catalogue, DetectionConfig
 DAILY_CANDIDATES = ("SeasonalNaive", "AutoETS", "AutoTheta", "AutoARIMA")
 WEEKLY_CANDIDATES = ("SeasonalNaive", "AutoETS", "AutoTheta")
 SEP = "|"
+FAMILY_GROUP = {
+    "count": "volume",
+    "sum": "volume",
+    "ratio": "ratio",
+    "rate": "rate",
+    "mean": "mean",
+}
+
+
+def group_name(
+    kpi: str,
+    dimension: str,
+    family: str,
+    granularity: str,
+    transforms: dict[str, str] | None = None,
+    share_kpis: Collection[str] = (),
+) -> str:
+    """The detector group a series belongs to. With no 3b change it is the Phase 3 name."""
+    if share_kpis and kpi in share_kpis and dimension != "total":
+        base = "share"
+    elif transforms and kpi in transforms:
+        base = f"{FAMILY_GROUP[family]}_{transforms[kpi]}"
+    else:
+        base = FAMILY_GROUP[family]
+    return f"{base}|{granularity}"
+
+
+def apply_transforms(
+    frame: pd.DataFrame, transforms: dict[str, str] | None
+) -> tuple[pd.DataFrame, set[str]]:
+    """Put transformed KPIs on their model scale. Share series are never transformed.
+
+    Returns the frame and the ids of the series that were transformed.
+    """
+    if not transforms or frame.empty:
+        return frame, set()
+    kind = frame["kind"] if "kind" in frame.columns else pd.Series("level", index=frame.index)
+    is_log = frame["kpi"].map(transforms).eq("log1p") & kind.ne("share")
+    if not is_log.any():
+        return frame, set()
+    out = frame.assign(y=np.where(is_log, np.log1p(frame["y"].clip(lower=0)), frame["y"]))
+    return out, set(out.loc[is_log, "unique_id"])
 
 
 def series_id(kpi: str, dimension: str, segment: str, granularity: str) -> str:
@@ -61,10 +103,12 @@ def mondays(start: date, end: date) -> list[date]:
     return out
 
 
-def load_series(con: duckdb.DuckDBPyConnection, catalogue: Catalogue) -> pd.DataFrame:
+def load_series(
+    con: duckdb.DuckDBPyConnection, catalogue: Catalogue, share_kpis: Collection[str] = ()
+) -> pd.DataFrame:
     """All monitored observations: unique_id, ds, y (value), n, kpi, granularity, min_n."""
     frame = con.execute(
-        "SELECT kpi, dimension, segment, granularity, date AS ds, value AS y, n "
+        "SELECT kpi, dimension, segment, granularity, date AS ds, value AS y, n, numerator "
         "FROM metrics.series ORDER BY kpi, dimension, segment, granularity, date"
     ).df()
     frame["ds"] = pd.to_datetime(frame["ds"])
@@ -84,6 +128,30 @@ def load_series(con: duckdb.DuckDBPyConnection, catalogue: Catalogue) -> pd.Data
     frame["min_n"] = frame["kpi"].map(
         {k.name: 0 if k.is_additive else k.min_sample for k in catalogue.kpis}
     )
+    frame["kind"] = "level"
+    if share_kpis:
+        # Change C: a segment is tested as its share of the total (same day, or same week), so a
+        # shock that moves every segment together does not trigger every segment at once.
+        names = ", ".join(f"'{k}'" for k in share_kpis)
+        totals = pd.concat(
+            [
+                con.execute(
+                    f"SELECT kpi, 'daily' AS granularity, date AS ds, numerator AS total "
+                    f"FROM metrics.daily_kpi WHERE dimension = 'total' AND kpi IN ({names})"
+                ).df(),
+                con.execute(
+                    f"SELECT kpi, 'weekly' AS granularity, date AS ds, numerator AS total "
+                    f"FROM metrics.weekly_kpi WHERE dimension = 'total' AND kpi IN ({names})"
+                ).df(),
+            ]
+        )
+        totals["ds"] = pd.to_datetime(totals["ds"])
+        frame = frame.merge(totals, on=["kpi", "granularity", "ds"], how="left")
+        is_share = frame["kpi"].isin(list(share_kpis)) & (frame["dimension"] != "total")
+        share = frame["numerator"] / frame["total"].where(frame["total"] > 0)
+        frame.loc[is_share, "y"] = share[is_share]
+        frame.loc[is_share, "kind"] = "share"
+        frame = frame.drop(columns=["total"])
     return frame
 
 
@@ -124,11 +192,14 @@ def forecast_origins(
     models: dict[str, list[str]],
     spec: ForecastSpec,
     cfg: DetectionConfig,
+    transforms: dict[str, str] | None = None,
 ) -> pd.DataFrame:
     """Fit at every origin and forecast forward.
 
     `models` maps unique_id -> list of model names to fit for that series.
-    Returns one row per (unique_id, model, origin, ds) with yhat, lo, hi.
+    `transforms` maps a KPI to a model scale ("log1p"); those series are fitted on that scale and
+    their forecast rows carry model_scale = "log1p" (yhat, lo, hi stay on the model scale).
+    Returns one row per (unique_id, model, origin, ds) with yhat, lo, hi, model_scale.
     """
     results = []
     for origin in origins:
@@ -144,6 +215,7 @@ def forecast_origins(
             if part.empty:
                 continue
             part = clean_history(part, cfg)
+            part, log_uids = apply_transforms(part, transforms)
             # minimum history: two full seasons (and at least 8 points) for every model
             counts = part.groupby("unique_id")["ds"].count()
             eligible = counts[counts >= max(2 * season, 8)].index
@@ -171,9 +243,14 @@ def forecast_origins(
                     block["lo"] = fc[f"{name}-lo-{spec.level}"].to_numpy()
                     block["hi"] = fc[f"{name}-hi-{spec.level}"].to_numpy()
                     block["origin"] = origin_ts
+                    block["model_scale"] = np.where(
+                        block["unique_id"].isin(log_uids), "log1p", "raw"
+                    )
                     results.append(block)
     if not results:
-        return pd.DataFrame(columns=["unique_id", "ds", "model", "yhat", "lo", "hi", "origin"])
+        return pd.DataFrame(
+            columns=["unique_id", "ds", "model", "yhat", "lo", "hi", "origin", "model_scale"]
+        )
     out = pd.concat(results, ignore_index=True)
     out["ds"] = pd.to_datetime(out["ds"])
     return out
