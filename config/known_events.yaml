@@ -1,0 +1,54 @@
+# Known real-world events (Phase 3b, pre-registered 2026-10-26, BEFORE the final 2018 run).
+#
+# Purpose: label clean-run alarms that coincide with a documented real event, as a
+# SECOND figure ("alarms matching an unlabelled real event"). These alarms are NEVER
+# moved out of the false-alarm count and NEVER counted as true positives.
+#
+# Rules fixed now:
+#   * An alarm matches an event if its date is inside [start, end] (inclusive) and its
+#     KPI is in `kpis` (or `kpis: all`).
+#   * The list may not be edited after the 2018 run starts. A correction before the run
+#     must be recorded in the ADR deviations log.
+#   * Only events listed here count. No event is added after seeing alarms.
+
+events:
+  - id: truckers_strike_2018
+    name: Brazilian truckers' strike
+    start: 2018-05-21
+    end: 2018-05-31
+    kpis: all
+    note: >-
+      National road-freight strike that disrupted deliveries and supply. Dates given by the
+      project owner on 2026-10-26.
+
+  # FIFA World Cup 2018: only the days on which Brazil's national team played (shops and
+  # offices close or slow down during Brazil matches). Match days only, one day each,
+  # volume KPIs only. Dates are from the published tournament schedule.
+  - id: world_cup_2018_brazil_group_1
+    name: World Cup 2018, Brazil v Switzerland
+    start: 2018-06-17
+    end: 2018-06-17
+    kpis: [orders, gmv]
+  - id: world_cup_2018_brazil_group_2
+    name: World Cup 2018, Brazil v Costa Rica
+    start: 2018-06-22
+    end: 2018-06-22
+    kpis: [orders, gmv]
+  - id: world_cup_2018_brazil_group_3
+    name: World Cup 2018, Brazil v Serbia
+    start: 2018-06-27
+    end: 2018-06-27
+    kpis: [orders, gmv]
+  - id: world_cup_2018_brazil_round_of_16
+    name: World Cup 2018, Brazil v Mexico
+    start: 2018-07-02
+    end: 2018-07-02
+    kpis: [orders, gmv]
+  - id: world_cup_2018_brazil_quarter_final
+    name: World Cup 2018, Brazil v Belgium
+    start: 2018-07-06
+    end: 2018-07-06
+    kpis: [orders, gmv]
+
+# Not in the 2017 development test period (2017-08-28 to 2017-12-31): the 2017 Brazilian
+# general strikes (28 April and 30 June) fall in the fit period, not the test period.

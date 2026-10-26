@@ -315,3 +315,15 @@ unknown-category soft limit 2.5% (observed 1.44%), and the "no gaps" check now u
   status is the final snapshot: a cancellation after the simulated date cannot be undone.
 * **Data cut-off.** The data ends abruptly (orders fall to 1-14 a day on 29-31 August 2018). The Phase 2 window
   rule (trailing 7-day mean) did not exclude these days; see AI_ML_PLAN.md section 2.5.
+
+### Last reliable day (Phase 3b) - validity rule defined after diagnosis
+
+The Olist data does not end cleanly. In the Phase 3 evaluation, orders fell to 14, 4 and 1 on the last three days of August 2018, and the Phase 2 window rule (a trailing 7-day mean) let those days into the monitoring window.
+
+**Rule (fixed 2026-10-26, before any 3b run):** a day is a *collapse day* if total orders are below 35% of the median total orders of the previous 28 days. The **last reliable day** is the last day before the terminal run of consecutive collapse days that ends at the last day of the data. Days after it are not tested and are logged as suppressed.
+
+**Label: validity rule defined after diagnosis.** It was written after the end-of-data drop had been seen in the Phase 3 evaluation, so it is not a held-out finding.
+
+**Value:** to be computed by `ds/feed_guard.py` and recorded here when it runs. It is not stated in advance, so that the code, not the author, produces it.
+
+The Phase 2 monitoring-window rule is corrected to use a centred rolling mean, and the EDA is re-run; the new window and its effect on `docs/DATA_PLAN.md` section 14 are recorded when that is done.
